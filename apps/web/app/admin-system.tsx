@@ -101,6 +101,7 @@ const sections: Section[] = [
 ];
 
 const blankAdmin = { login: '', email: '', password: '' };
+const blankSelfAccountForm = { login: '', email: '', currentPassword: '', newPassword: '' };
 
 const blankTutorial: TutorialInput = {
   title: '',
@@ -151,6 +152,9 @@ export function AdminSystem({
     configVersion: number;
     emailConfigured: boolean;
   } | null>(null);
+  const [selfAccount, setSelfAccount] = useState<DataRow | null>(null);
+  const [selfAccountForm, setSelfAccountForm] = useState({ ...blankSelfAccountForm });
+  const [accountSaved, setAccountSaved] = useState(false);
   const [limits, setLimits] = useState<Limits | null>(null);
   const [articles, setArticles] = useState<Tutorial[]>([]);
   const [editing, setEditing] = useState<Tutorial | null>(null);
@@ -214,9 +218,20 @@ export function AdminSystem({
     if (target === 'ai') setJobs((await adminApi('/admin/jobs')).items);
     if (target === 'audits') setAudits((await adminApi('/admin/audits')).items);
     if (target === 'settings') {
-      const [s, l] = await Promise.all([adminApi('/admin/settings'), adminApi('/admin/limits')]);
+      const [s, l, a] = await Promise.all([
+        adminApi('/admin/settings'),
+        adminApi('/admin/limits'),
+        adminApi('/admin/me/account'),
+      ]);
       setSettings(s);
       setLimits(limitsResponseSchema.parse(l));
+      setSelfAccount(a);
+      setSelfAccountForm({
+        login: String(a.login ?? ''),
+        email: String(a.email ?? ''),
+        currentPassword: '',
+        newPassword: '',
+      });
     }
     if (target === 'tutorials') await loadTutorials();
   }
@@ -448,6 +463,39 @@ export function AdminSystem({
         setSettings={setSettings}
         limits={limits}
         setLimits={setLimits}
+        selfAccount={selfAccount}
+        selfAccountForm={selfAccountForm}
+        setSelfAccountForm={setSelfAccountForm}
+        accountSaved={accountSaved}
+        saveAccount={() =>
+          run(async () => {
+            const updated = await adminApi(
+              '/admin/me/account',
+              {
+                currentPassword: selfAccountForm.currentPassword,
+                login:
+                  selfAccountForm.login.trim().toLowerCase() === String(selfAccount?.login ?? '')
+                    ? undefined
+                    : selfAccountForm.login,
+                email:
+                  selfAccountForm.email.trim().toLowerCase() === String(selfAccount?.email ?? '')
+                    ? undefined
+                    : selfAccountForm.email,
+                newPassword: selfAccountForm.newPassword || undefined,
+              },
+              'PATCH',
+            );
+            setSelfAccount(updated);
+            setSelfAccountForm({
+              login: String(updated.login ?? ''),
+              email: String(updated.email ?? ''),
+              currentPassword: '',
+              newPassword: '',
+            });
+            setAccountSaved(true);
+            await refreshMe();
+          })
+        }
         save={() =>
           run(async () => {
             if (settings)
@@ -996,6 +1044,11 @@ function Settings({
   setSettings,
   limits,
   setLimits,
+  selfAccount,
+  selfAccountForm,
+  setSelfAccountForm,
+  accountSaved,
+  saveAccount,
   save,
 }: {
   locale: UiLocale;
@@ -1007,71 +1060,163 @@ function Settings({
   }) => void;
   limits: Limits | null;
   setLimits: (value: Limits) => void;
+  selfAccount: DataRow | null;
+  selfAccountForm: { login: string; email: string; currentPassword: string; newPassword: string };
+  setSelfAccountForm: (value: {
+    login: string;
+    email: string;
+    currentPassword: string;
+    newPassword: string;
+  }) => void;
+  accountSaved: boolean;
+  saveAccount: () => void;
   save: () => void;
 }) {
   const t = (k: string) => adminText(locale, k);
-  if (!settings || !limits)
+  if (!settings || !limits || !selfAccount)
     return (
       <Card variant="borderless">
         <Empty description={t('loading')} />
       </Card>
     );
   return (
-    <Card variant="borderless" title={t('nav.settings')}>
-      <Form layout="vertical" onFinish={save} requiredMark={false} className="admin-settings-form">
-        <Form.Item label={authText(locale, 'mode')}>
-          <Select
-            value={settings.accessMode}
-            onChange={(value) => setSettings({ ...settings, accessMode: value })}
-            options={[
-              { value: 'anonymous_allowed', label: authText(locale, 'anonymousAllowed') },
-              { value: 'login_required', label: authText(locale, 'required') },
-            ]}
+    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Card variant="borderless" title={t('currentAdminAccount')}>
+        {accountSaved && (
+          <Alert
+            type="success"
+            showIcon
+            message={t('accountSavedReloginHint')}
+            style={{ marginBottom: 16 }}
           />
-        </Form.Item>
-        <Divider />
-        <Row gutter={16}>
-          {(
-            [
-              'dailyBudget',
-              'riskAnonymous',
-              'riskAccount',
-              'rewriteAnonymous',
-              'rewriteAccount',
-            ] as const
-          ).map((key) => (
-            <Col key={key} xs={24} md={12} xl={8}>
-              <Form.Item label={t(key)}>
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={key === 'dailyBudget' ? 0 : 1}
-                  step={key === 'dailyBudget' ? 0.000001 : 1}
-                  value={key === 'dailyBudget' ? Number(limits[key]) : limits[key]}
-                  onChange={(value) =>
-                    setLimits({
-                      ...limits,
-                      [key]: key === 'dailyBudget' ? String(value ?? 0) : Number(value ?? 1),
-                    })
+        )}
+        <Form layout="vertical" onFinish={saveAccount} requiredMark={false}>
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item label={t('login')}>
+                <Input value={String(selfAccount.login ?? '')} disabled autoComplete="username" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label={t('email')}>
+                <Input value={String(selfAccount.email ?? '')} disabled />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label={t('newLogin')}>
+                <Input
+                  value={selfAccountForm.login}
+                  placeholder={t('leaveBlankNoChange')}
+                  autoComplete="username"
+                  onChange={(e) =>
+                    setSelfAccountForm({ ...selfAccountForm, login: e.target.value })
                   }
                 />
               </Form.Item>
             </Col>
-          ))}
-        </Row>
-        <Form.Item label={t('allowedTutorialHosts')}>
-          <Input.TextArea
-            rows={5}
-            value={limits.allowedTutorialHosts.join('\n')}
-            onChange={(e) =>
-              setLimits({ ...limits, allowedTutorialHosts: e.target.value.split('\n') })
-            }
-          />
-        </Form.Item>
-        <Button type="primary" htmlType="submit">
-          {t('save')}
-        </Button>
-      </Form>
-    </Card>
+            <Col xs={24} md={12}>
+              <Form.Item label={t('newEmail')}>
+                <Input
+                  type="email"
+                  value={selfAccountForm.email}
+                  placeholder={t('leaveBlankNoChange')}
+                  onChange={(e) =>
+                    setSelfAccountForm({ ...selfAccountForm, email: e.target.value })
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label={t('newPassword')}>
+                <Input.Password
+                  minLength={8}
+                  value={selfAccountForm.newPassword}
+                  placeholder={t('leaveBlankNoChange')}
+                  autoComplete="new-password"
+                  onChange={(e) =>
+                    setSelfAccountForm({ ...selfAccountForm, newPassword: e.target.value })
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label={t('currentPassword')} required>
+                <Input.Password
+                  value={selfAccountForm.currentPassword}
+                  autoComplete="current-password"
+                  onChange={(e) =>
+                    setSelfAccountForm({ ...selfAccountForm, currentPassword: e.target.value })
+                  }
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Button type="primary" htmlType="submit" disabled={!selfAccountForm.currentPassword}>
+            {t('saveAccount')}
+          </Button>
+        </Form>
+      </Card>
+      <Card variant="borderless" title={t('nav.settings')}>
+        <Form
+          layout="vertical"
+          onFinish={save}
+          requiredMark={false}
+          className="admin-settings-form"
+        >
+          <Form.Item label={authText(locale, 'mode')}>
+            <Select
+              value={settings.accessMode}
+              onChange={(value) => setSettings({ ...settings, accessMode: value })}
+              options={[
+                { value: 'anonymous_allowed', label: authText(locale, 'anonymousAllowed') },
+                { value: 'login_required', label: authText(locale, 'required') },
+              ]}
+            />
+          </Form.Item>
+          <Divider />
+          <Row gutter={16}>
+            {(
+              [
+                'dailyBudget',
+                'riskAnonymous',
+                'riskAccount',
+                'rewriteAnonymous',
+                'rewriteAccount',
+              ] as const
+            ).map((key) => (
+              <Col key={key} xs={24} md={12} xl={8}>
+                <Form.Item label={t(key)}>
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    min={key === 'dailyBudget' ? 0 : 1}
+                    step={key === 'dailyBudget' ? 0.000001 : 1}
+                    value={key === 'dailyBudget' ? Number(limits[key]) : limits[key]}
+                    onChange={(value) =>
+                      setLimits({
+                        ...limits,
+                        [key]: key === 'dailyBudget' ? String(value ?? 0) : Number(value ?? 1),
+                      })
+                    }
+                  />
+                </Form.Item>
+              </Col>
+            ))}
+          </Row>
+          <Form.Item label={t('allowedTutorialHosts')}>
+            <Input.TextArea
+              rows={5}
+              value={limits.allowedTutorialHosts.join('\n')}
+              onChange={(e) =>
+                setLimits({ ...limits, allowedTutorialHosts: e.target.value.split('\n') })
+              }
+            />
+          </Form.Item>
+          <Button type="primary" htmlType="submit">
+            {t('save')}
+          </Button>
+        </Form>
+      </Card>
+    </Space>
   );
 }
 

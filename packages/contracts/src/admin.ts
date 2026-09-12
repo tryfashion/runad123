@@ -55,6 +55,27 @@ export const adminAccountInputSchema = z.strictObject({
 export const adminPasswordResetInputSchema = z.strictObject({
   password: z.string().min(8).max(256),
 });
+export const adminSelfAccountInputSchema = z
+  .strictObject({
+    currentPassword: z.string().min(1).max(256),
+    login: z
+      .string()
+      .trim()
+      .min(3)
+      .max(254)
+      .transform((value) => value.toLowerCase())
+      .optional(),
+    email: z
+      .string()
+      .trim()
+      .pipe(z.email().max(254))
+      .transform((value) => value.toLowerCase())
+      .optional(),
+    newPassword: z.string().min(8).max(256).optional(),
+  })
+  .refine((value) => value.login || value.email || value.newPassword, {
+    message: 'NO_ACCOUNT_CHANGE',
+  });
 export type Tutorial = z.infer<typeof tutorialSchema>;
 
 export const tutorialListSchema = z.object({
@@ -67,5 +88,6 @@ export type TutorialInput = z.infer<typeof tutorialInputSchema>;
 export type AdminUserStatusInput = z.infer<typeof adminUserStatusInputSchema>;
 export type AdminAccountInput = z.infer<typeof adminAccountInputSchema>;
 export type AdminPasswordResetInput = z.infer<typeof adminPasswordResetInputSchema>;
+export type AdminSelfAccountInput = z.infer<typeof adminSelfAccountInputSchema>;
 
 export * from './theme-links.js';

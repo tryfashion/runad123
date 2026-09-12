@@ -140,6 +140,8 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
         return send(await admin.limits(token));
       if (request.method === 'GET' && path === '/admin/admins')
         return send(await admin.adminAccounts(token));
+      if (request.method === 'GET' && path === '/admin/me/account')
+        return send(await admin.selfAccount(token));
       if (request.method === 'GET' && path === '/admin/permissions')
         return send(await admin.permissions(token));
       if (request.method === 'GET' && path === '/admin/tutorials')
@@ -203,6 +205,8 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
         return send(await admin.saveLimits(body, token, requestId));
       if (request.method === 'POST' && path === '/admin/admins')
         return send(await admin.createAdmin(body, token, requestId), 201);
+      if (request.method === 'PATCH' && path === '/admin/me/account')
+        return send(await admin.updateSelfAccount(body, token, requestId));
       const adminPassword = /^\/admin\/admins\/([a-f0-9-]{36})\/password$/.exec(path);
       if (request.method === 'PATCH' && adminPassword)
         return send(await admin.resetAdminPassword(adminPassword[1]!, body, token, requestId));

@@ -35,7 +35,7 @@ export async function hashAdminPassword(
   const hash = await scryptHash(password, normalizedSalt);
   return { salt: normalizedSalt, hash, version: ADMIN_PASSWORD_VERSION };
 }
-async function verifyAdminPassword(
+export async function verifyAdminPassword(
   password: string,
   salt: NodeJS.ArrayBufferView,
   expected: NodeJS.ArrayBufferView,

@@ -9,8 +9,9 @@ import {
   adminUserStatusInputSchema,
   adminAccountInputSchema,
   adminPasswordResetInputSchema,
+  adminSelfAccountInputSchema,
 } from '@runad123/contracts/admin';
-import { AuthService, hashAdminPassword } from './auth.js';
+import { AuthService, hashAdminPassword, verifyAdminPassword } from './auth.js';
 import { RiskService } from './risk-service.js';
 import { aiConfigSchema, disabledAiConfig } from './deepseek.js';
 import { digest, ServiceError } from './security.js';
@@ -415,6 +416,98 @@ export class AdminService {
     });
   }
 
+  async selfAccount(token?: string) {
+    return this.auth.store.transaction(async (tx) => {
+      const actor = await this.auth.authorize(tx, token, 'admin'),
+        credential = (await tx.find('adminCredentials', { userId: actor.user!.id }))[0];
+      if (!credential) throw new ServiceError('SERVICE_NOT_READY', 503);
+      return {
+        id: actor.user!.id,
+        login: credential.loginNormalized,
+        email: actor.user!.emailDisplay,
+        role: actor.user!.role,
+        status: actor.user!.status,
+        lastLoginAt: actor.user!.lastLoginAt?.toISOString() ?? null,
+      };
+    });
+  }
+  async updateSelfAccount(raw: unknown, token: string | undefined, requestId: string) {
+    const input = adminSelfAccountInputSchema.parse(raw);
+    return this.auth.store.transaction(async (tx) => {
+      const actor = await this.auth.authorize(tx, token, 'admin'),
+        user = actor.user!,
+        credential = (await tx.find('adminCredentials', { userId: user.id }))[0];
+      if (!credential) throw new ServiceError('SERVICE_NOT_READY', 503);
+      if (
+        credential.passwordVersion !== 'scrypt-v1' ||
+        !(await verifyAdminPassword(
+          input.currentPassword,
+          credential.passwordSalt,
+          credential.passwordHash,
+        ))
+      )
+        throw new ServiceError('ADMIN_LOGIN_FAILED', 401);
+      const login = input.login ?? credential.loginNormalized,
+        email = input.email ?? user.emailNormalized,
+        now = this.auth.now(),
+        before = {
+          login: credential.loginNormalized,
+          email: user.emailNormalized,
+          passwordVersion: credential.passwordVersion,
+        };
+      if (login !== credential.loginNormalized) {
+        const prior = (await tx.find('adminCredentials', { loginNormalized: login }))[0];
+        if (prior && prior.userId !== user.id) throw new ServiceError('ADMIN_ACCOUNT_EXISTS', 409);
+      }
+      if (email !== user.emailNormalized) {
+        const prior = (await tx.find('users', { emailNormalized: email }))[0];
+        if (prior && prior.id !== user.id) throw new ServiceError('ADMIN_ACCOUNT_EXISTS', 409);
+      }
+      const passwordRecord = input.newPassword
+        ? await hashAdminPassword(input.newPassword)
+        : {
+            salt: credential.passwordSalt,
+            hash: credential.passwordHash,
+            version: credential.passwordVersion,
+          };
+      await tx.update(
+        'users',
+        { id: user.id },
+        { emailNormalized: email, emailDisplay: email, updatedAt: now },
+      );
+      await tx.update(
+        'adminCredentials',
+        { userId: user.id },
+        {
+          userId: user.id,
+          loginNormalized: login,
+          passwordSalt: passwordRecord.salt,
+          passwordHash: passwordRecord.hash,
+          passwordVersion: passwordRecord.version,
+          createdAt: credential.createdAt,
+          updatedAt: now,
+        },
+      );
+      if (input.newPassword) {
+        const sessions = await tx.find('sessions', { userId: user.id });
+        for (const session of sessions) {
+          if (session.id === actor.session.id) continue;
+          await tx.update('sessions', { id: session.id }, { revokedAt: now, updatedAt: now });
+        }
+      }
+      await this.audit(
+        tx,
+        user.id,
+        'admin_account.self_update',
+        'users',
+        user.id,
+        before,
+        { login, email, passwordChanged: !!input.newPassword },
+        requestId,
+      );
+      return { id: user.id, login, email, role: user.role, status: user.status };
+    });
+  }
   async adminAccounts(token?: string) {
     return this.auth.store.transaction(async (tx) => {
       await this.auth.authorize(tx, token, 'admin');

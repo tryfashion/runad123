@@ -85,6 +85,19 @@ const rows: Record<string, [string, string, string]> = {
     '目前版本先使用內建管理員角色；細緻角色表已預留為後續擴充。',
     'This version uses the built-in administrator role; granular RBAC tables are reserved for the next iteration.',
   ],
+
+  currentAdminAccount: ['当前管理员账号', '目前管理員帳號', 'Current admin account'],
+  currentPassword: ['当前密码', '目前密碼', 'Current password'],
+  newLogin: ['新登录名', '新登入名', 'New login'],
+  newEmail: ['新邮箱', '新電子郵件', 'New email'],
+  leaveBlankNoChange: ['不修改则留空', '不修改則留空', 'Leave blank to keep unchanged'],
+  saveAccount: ['保存账号设置', '儲存帳號設定', 'Save account settings'],
+  accountSavedReloginHint: [
+    '账号已保存。若修改了登录名或密码，下次登录请使用新信息。',
+    '帳號已儲存。若修改了登入名或密碼，下次登入請使用新資訊。',
+    'Account saved. Use the new login or password next time if changed.',
+  ],
+
   accountHelp: [
     '这里管理网站账号与插件安装身份。停用账号会让其现有会话失效。',
     '這裡管理網站帳號與擴充功能安裝身分。停用帳號會讓其現有工作階段失效。',
