@@ -93,6 +93,7 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
           '/api/v1/installations',
           '/api/v1/tutorials',
           '/api/v1/theme-link',
+          '/api/v1/sourcing-sites',
         ].includes(new URL(request.url).pathname)
       )
         throw new ServiceError('SESSION_EXPIRED', 401);
@@ -130,8 +131,12 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
       }
       if (request.method === 'GET' && path === '/theme-link')
         return send(await new ThemeLinkService(service).lookup(query));
+      if (request.method === 'GET' && path === '/sourcing-sites')
+        return send(await new ThemeLinkService(service).sourcingSites());
       if (request.method === 'GET' && path === '/admin/theme-links')
         return send(await new ThemeLinkService(service).config(token));
+      if (request.method === 'GET' && path === '/admin/sourcing-sites')
+        return send(await new ThemeLinkService(service).sourcingConfig(token));
       if (request.method === 'GET' && path === '/admin/overview')
         return send(await admin.overview(token));
       if (request.method === 'GET' && path === '/admin/products/trending')
@@ -201,6 +206,8 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
       const body = await readJson(request);
       if (request.method === 'PATCH' && path === '/admin/theme-links')
         return send(await new ThemeLinkService(service).save(body, token, requestId));
+      if (request.method === 'PATCH' && path === '/admin/sourcing-sites')
+        return send(await new ThemeLinkService(service).saveSourcing(body, token, requestId));
       if (request.method === 'PATCH' && path === '/admin/limits')
         return send(await admin.saveLimits(body, token, requestId));
       if (request.method === 'POST' && path === '/admin/admins')

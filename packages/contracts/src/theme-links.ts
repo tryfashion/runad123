@@ -38,7 +38,20 @@ export const themeLookupQuerySchema = z.strictObject({ name: z.string().trim().m
 export const themeLookupSchema = z.strictObject({
   link: z.object({ name: z.string().max(250), url: themeUrlSchema }).nullable(),
 });
+export const sourcingSiteSchema = z.strictObject({
+  id: z.uuid(),
+  name: z.string().trim().min(1).max(80),
+  url: themeUrlSchema,
+  enabled: z.boolean(),
+});
+export const sourcingSiteListSchema = z.array(sourcingSiteSchema).max(20);
+export const sourcingSitesConfigSchema = z.strictObject({
+  expectedVersion: z.number().int().nonnegative(),
+  items: sourcingSiteListSchema,
+});
+export const sourcingSitesResponseSchema = z.strictObject({ items: sourcingSiteListSchema });
 export type ThemeLink = z.infer<typeof themeLinkSchema>;
+export type SourcingSite = z.infer<typeof sourcingSiteSchema>;
 
 const themeWords = {
   title: ['主题返利链接', '主題返利連結', 'Theme affiliate links'],
@@ -66,6 +79,22 @@ const themeWords = {
     '通过此链接购买，我们可能获得佣金。',
     '透過此連結購買，我們可能獲得佣金。',
     'We may earn a commission if you buy through this link.',
+  ],
+  sourcingTitle: ['选品网站推荐', '選品網站推薦', 'Sourcing websites'],
+  sourcingHint: [
+    '这些链接会显示在插件的非 Shopify 店铺提示中。',
+    '這些連結會顯示在外掛的非 Shopify 店鋪提示中。',
+    'These links appear in the extension when the current page is not a Shopify store.',
+  ],
+  sourcingName: ['网站名称', '網站名稱', 'Website name'],
+  sourcingUrl: ['网站网址（HTTPS）', '網站網址（HTTPS）', 'Website URL (HTTPS)'],
+  sourcingAdd: ['添加网站', '新增網站', 'Add website'],
+  sourcingSave: ['保存选品网站', '儲存選品網站', 'Save websites'],
+  sourcingSaved: ['选品网站已保存', '選品網站已儲存', 'Websites saved'],
+  sourcingInvalid: [
+    '请检查网站名称和 HTTPS 网址。',
+    '請檢查網站名稱和 HTTPS 網址。',
+    'Check website names and HTTPS URLs.',
   ],
 } as const;
 export function themeText(locale: 'zh-Hans' | 'zh-Hant' | 'en', key: keyof typeof themeWords) {

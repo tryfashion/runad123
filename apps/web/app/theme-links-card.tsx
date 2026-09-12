@@ -2,7 +2,13 @@
 import { Button, Card, Collapse, Empty, Form, Input, List, Space, Switch, Typography } from 'antd';
 import { DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { useState } from 'react';
-import { themeText, themeLinksConfigSchema, type ThemeLink } from '@runad123/contracts/admin';
+import {
+  themeText,
+  themeLinksConfigSchema,
+  sourcingSitesConfigSchema,
+  type ThemeLink,
+  type SourcingSite,
+} from '@runad123/contracts/admin';
 import { adminText } from '@runad123/contracts/admin-i18n';
 import type { UiLocale } from '@runad123/contracts/i18n';
 import { adminApi, ApiFailure } from './admin-api';
@@ -10,6 +16,15 @@ import { adminApi, ApiFailure } from './admin-api';
 const { Paragraph, Text } = Typography;
 
 export function ThemeLinksCard({ locale }: { locale: UiLocale }) {
+  return (
+    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <ThemeAffiliateLinksCard locale={locale} />
+      <SourcingSitesCard locale={locale} />
+    </Space>
+  );
+}
+
+function ThemeAffiliateLinksCard({ locale }: { locale: UiLocale }) {
   const t = (key: Parameters<typeof themeText>[1]) => themeText(locale, key);
   const [config, setConfig] = useState<{ expectedVersion: number; items: ThemeLink[] } | null>(
     null,
@@ -159,6 +174,142 @@ export function ThemeLinksCard({ locale }: { locale: UiLocale }) {
             }
           >
             {t('add')}
+          </Button>
+        </Space>
+      )}
+    </Card>
+  );
+}
+
+function SourcingSitesCard({ locale }: { locale: UiLocale }) {
+  const t = (key: Parameters<typeof themeText>[1]) => themeText(locale, key);
+  const [config, setConfig] = useState<{ expectedVersion: number; items: SourcingSite[] } | null>(
+    null,
+  );
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  async function run(save = false) {
+    setBusy(true);
+    setMessage('');
+    try {
+      const input = save ? sourcingSitesConfigSchema.parse(config) : undefined;
+      setConfig(
+        sourcingSitesConfigSchema.parse(await adminApi('/admin/sourcing-sites', input, 'PATCH')),
+      );
+      if (save) setMessage(t('sourcingSaved'));
+    } catch (e) {
+      setMessage(e instanceof ApiFailure ? adminText(locale, e.code) : t('sourcingInvalid'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function patch(id: string, value: Partial<SourcingSite>) {
+    setConfig(
+      (old) =>
+        old && {
+          ...old,
+          items: old.items.map((item) => (item.id === id ? { ...item, ...value } : item)),
+        },
+    );
+  }
+
+  return (
+    <Card
+      variant="borderless"
+      title={t('sourcingTitle')}
+      extra={
+        <Space>
+          <Button icon={<ReloadOutlined />} disabled={busy} onClick={() => void run()}>
+            {t('reload')}
+          </Button>
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            disabled={!config || busy}
+            onClick={() => void run(true)}
+          >
+            {t('sourcingSave')}
+          </Button>
+        </Space>
+      }
+    >
+      <Paragraph type="secondary">{t('sourcingHint')}</Paragraph>
+      {message && (
+        <Text type={message === t('sourcingSaved') ? 'success' : 'danger'}>{message}</Text>
+      )}
+      {!config ? (
+        <Empty description={t('reload')}>
+          <Button type="primary" loading={busy} onClick={() => void run()}>
+            {t('reload')}
+          </Button>
+        </Empty>
+      ) : (
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <List
+            dataSource={config.items}
+            locale={{ emptyText: adminText(locale, 'noData') }}
+            renderItem={(item, index) => (
+              <List.Item>
+                <Form
+                  layout="vertical"
+                  disabled={busy}
+                  requiredMark={false}
+                  style={{ width: '100%' }}
+                >
+                  <Space align="start" style={{ width: '100%' }}>
+                    <Switch
+                      checked={item.enabled}
+                      onChange={(enabled) => patch(item.id, { enabled })}
+                    />
+                    <Form.Item label={t('sourcingName')} style={{ flex: 1 }}>
+                      <Input
+                        value={item.name}
+                        maxLength={80}
+                        placeholder={`${t('sourcingName')} ${index + 1}`}
+                        onChange={(e) => patch(item.id, { name: e.target.value })}
+                      />
+                    </Form.Item>
+                    <Form.Item label={t('sourcingUrl')} style={{ flex: 2 }}>
+                      <Input
+                        type="url"
+                        value={item.url}
+                        maxLength={2048}
+                        onChange={(e) => patch(item.id, { url: e.target.value })}
+                      />
+                    </Form.Item>
+                    <Button
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() =>
+                        setConfig({
+                          ...config,
+                          items: config.items.filter((row) => row.id !== item.id),
+                        })
+                      }
+                    >
+                      {t('remove')}
+                    </Button>
+                  </Space>
+                </Form>
+              </List.Item>
+            )}
+          />
+          <Button
+            icon={<PlusOutlined />}
+            disabled={config.items.length >= 20 || busy}
+            onClick={() =>
+              setConfig({
+                ...config,
+                items: [
+                  ...config.items,
+                  { id: crypto.randomUUID(), name: '', url: '', enabled: false },
+                ],
+              })
+            }
+          >
+            {t('sourcingAdd')}
           </Button>
         </Space>
       )}

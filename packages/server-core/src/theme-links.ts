@@ -4,6 +4,8 @@ import {
   themeLinkListSchema,
   themeLookupQuerySchema,
   normalizeThemeName,
+  sourcingSitesConfigSchema,
+  sourcingSiteListSchema,
 } from '@runad123/contracts/admin';
 import { AuthService } from './auth.js';
 import { ServiceError } from './security.js';
@@ -32,6 +34,50 @@ export class ThemeLinkService {
           ),
       );
       return { link: match ? { name: match.name, url: match.url } : null };
+    });
+  }
+  async sourcingSites() {
+    return this.auth.store.transaction(async (tx) => {
+      const row = (await tx.find('settings', { key: 'sourcing_sites' }))[0];
+      return {
+        items: sourcingSiteListSchema.parse(row?.valueJson ?? []).filter((item) => item.enabled),
+      };
+    });
+  }
+  async sourcingConfig(token?: string) {
+    return this.auth.store.transaction(async (tx) => {
+      await this.auth.authorize(tx, token, 'admin');
+      const row = (await tx.find('settings', { key: 'sourcing_sites' }))[0];
+      return {
+        expectedVersion: row?.version ?? 0,
+        items: sourcingSiteListSchema.parse(row?.valueJson ?? []),
+      };
+    });
+  }
+  async saveSourcing(raw: unknown, token: string | undefined, requestId: string) {
+    const input = sourcingSitesConfigSchema.parse(raw);
+    return this.auth.store.transaction(async (tx) => {
+      const actor = await this.auth.authorize(tx, token, 'admin');
+      const prior = (await tx.find('settings', { key: 'sourcing_sites' }))[0];
+      if ((prior?.version ?? 0) !== input.expectedVersion)
+        throw new ServiceError('REVISION_CONFLICT', 409);
+      const now = this.auth.now(),
+        version = input.expectedVersion + 1;
+      const value = { valueJson: input.items, version, updatedBy: actor.user!.id, updatedAt: now };
+      if (prior) await tx.update('settings', { key: 'sourcing_sites' }, value);
+      else await tx.insert('settings', { key: 'sourcing_sites', ...value, createdAt: now });
+      await tx.insert('audits', {
+        id: randomUUID(),
+        adminUserId: actor.user!.id,
+        action: 'sourcing_sites.save',
+        targetType: 'settings',
+        targetId: 'sourcing_sites',
+        beforeJson: prior?.valueJson ?? [],
+        afterJson: input.items,
+        requestId,
+        createdAt: now,
+      });
+      return { expectedVersion: version, items: input.items };
     });
   }
   async save(raw: unknown, token: string | undefined, requestId: string) {

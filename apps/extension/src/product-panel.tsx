@@ -7,6 +7,8 @@ import { RewritePanel } from './rewrite-panel';
 import { RiskPanel } from './risk-panel';
 import { z } from 'zod';
 import { useEffect, useState } from 'react';
+import { sourcingSitesResponseSchema, type SourcingSite } from '@runad123/contracts/admin';
+import { readWebsite } from './website-overview';
 import {
   preparedRevisionSchema,
   draftPatchSchema,
@@ -44,6 +46,8 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
     [edits, setEdits] = useState<Edits | null>(null);
   const [risk, setRisk] = useState<RiskStatus | null>(null);
   const [autoRisk, setAutoRisk] = useState(false);
+  const [isNonShopify, setIsNonShopify] = useState(false);
+  const [sourcingSites, setSourcingSites] = useState<SourcingSite[]>([]);
   const [target, setTarget] = useState(''),
     [language, setLanguage] = useState<PreparedRevision['language']>('preserve'),
     [busy, setBusy] = useState(false),
@@ -82,6 +86,27 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
     setDirty(false);
   }
   useEffect(() => {
+    void chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then(async ([tab]) => {
+        if (tab?.id === undefined || !tab.url || !/^https?:/.test(tab.url)) return;
+        try {
+          const [result] = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: readWebsite,
+          });
+          setIsNonShopify(result?.result?.shopify === false);
+        } catch {
+          setIsNonShopify(!/\/products\/[^/]+/.test(new URL(tab.url).pathname));
+        }
+      })
+      .catch(() => undefined);
+    void fetch(__RUNAD_API_ORIGIN__ + '/api/v1/sourcing-sites', { credentials: 'omit' })
+      .then(async (response) =>
+        response.ok ? sourcingSitesResponseSchema.parse((await response.json()).data).items : [],
+      )
+      .then(setSourcingSites)
+      .catch(() => undefined);
     void chrome.storage.local.get(['auth', 'lastDraft', 'draftEdits']).then(async (stored) => {
       const last = localDraft.safeParse(stored.lastDraft);
       if (stored.auth && last.success) {
@@ -280,8 +305,18 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
                 />
               </svg>
             </div>
-            <h2>{ui('ready')}</h2>
-            <p>{ui('hint')}</p>
+            <h2>{isNonShopify ? ui('nonShopifyTitle') : ui('ready')}</h2>
+            <p>{isNonShopify ? ui('sourcingPrompt') : ui('hint')}</p>
+            {isNonShopify && sourcingSites.length > 0 && (
+              <div className="sourcing-sites">
+                {sourcingSites.map((site) => (
+                  <a key={site.id} href={site.url} target="_blank" rel="noreferrer">
+                    <span aria-hidden="true">•</span>
+                    {site.name}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {product && (

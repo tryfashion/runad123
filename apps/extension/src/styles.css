@@ -532,3 +532,28 @@ pre {
   color: #475569;
   font-size: 13px;
 }
+
+.sourcing-sites {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 14px;
+}
+.sourcing-sites a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #33455e;
+  font-size: 12px;
+  box-shadow: 0 2px 8px #0f172a0d;
+}
+.sourcing-sites span {
+  color: #15936e;
+  font-size: 16px;
+  line-height: 1;
+}
