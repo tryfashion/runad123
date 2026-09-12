@@ -263,7 +263,7 @@ async function dispatch(raw: unknown) {
 chrome.runtime.onMessage.addListener((raw: unknown, sender, respond) => {
   if (
     sender.id !== chrome.runtime.id ||
-    sender.url !== chrome.runtime.getURL('sidepanel.html') ||
+    sender.url !== chrome.runtime.getURL('popup.html') ||
     !messages.safeParse(raw).success
   )
     return false;

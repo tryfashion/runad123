@@ -53,7 +53,7 @@ npx --yes pnpm@9.15.4 run dev:worker
 
 网站为 `http://127.0.0.1:3000`。三个 dev 命令会先构建共享包；开发时修改 packages 后重启对应命令。worker 在 MYSQL_URL、AUTH_SECRET 齐全时执行分批维护；额外提供 DEEPSEEK_API_KEY 且开启服务端 AI 配置后处理风险检查和改写。配置缺失保持对应功能不处理，不伪装检查成功。
 
-插件：打开 Chrome 扩展管理页，启用“开发者模式”→“加载已解压的扩展程序”→选择本项目 `apps/extension/dist`，然后固定并点击 runad123 工具栏图标。插件代码改变后，在扩展管理页点刷新并重新打开侧栏。M2 使用 sidePanel/storage/activeTab/scripting 和精确 API host permission；首次采集时按当前站点申请可选权限，已授权站点识别 Shopify 后显示 S 标记。M5 已加入 downloads/offscreen/alarms 权限用于后台下载与状态恢复。不要把开发预览包提交商店。
+插件：打开 Chrome 扩展管理页，启用“开发者模式”→“加载已解压的扩展程序”→选择本项目 `apps/extension/dist`，然后固定并点击 runad123 工具栏图标。插件代码改变后，在扩展管理页点刷新并重新点击工具栏图标打开弹窗。M2 使用 popup/storage/activeTab/scripting 和精确 API host permission；首次采集时按当前站点申请可选权限，已授权站点识别 Shopify 后显示 S 标记。M5 已加入 downloads/offscreen/alarms 权限用于后台下载与状态恢复。不要把开发预览包提交商店。
 
 只查看界面时不用创建 `.env`。运行真实身份服务需要复制根目录 `.env.example` 为 `.env`，填写已有 MySQL 数据库连接、AUTH_SECRET、WEB_ORIGIN 和 CHROME_EXTENSION_IDS，并执行显式迁移；真实密码不进 Git。SMTP 未配置时匿名身份可以使用，邮箱登录明确不可用。开发环境与正式环境的 API origin/插件 ID 分开管理，当前无生产凭据、无固定生产插件 ID。
 

@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => {
       rolldownOptions: {
         input: {
           offscreen: resolve(import.meta.dirname, 'offscreen.html'),
-          sidepanel: resolve(import.meta.dirname, 'sidepanel.html'),
+          popup: resolve(import.meta.dirname, 'popup.html'),
           background: resolve(import.meta.dirname, 'src/background.ts'),
           detect: resolve(import.meta.dirname, 'src/detect.ts'),
         },

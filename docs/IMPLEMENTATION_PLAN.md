@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-13 插件入口改为 popup 试用：按用户要求将点击插件图标后的入口从 Chrome sidePanel 右侧抽屉改为 action popup，复用原产品/网站概览/教程/工具界面；后台消息来源校验同步改为 popup.html，便于观察切换页面后弹窗自动收起、重新打开即重新识别当前页的体验。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 popup chunk 超 500k 的既有体积提醒。
+
 - 2026-09-13 插件未授权站点识别提示修复：当前页不是明显商品/collection URL 且没有站点权限时，产品页显示“允许识别当前网站”按钮；授权后立即重新识别 Shopify 首页或非 Shopify 页面，避免重新加载插件后界面仍停留在旧默认提示。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有提醒。
 
 - 2026-09-13 插件当前标签页变化刷新：产品页不再只在侧栏打开时识别一次；监听当前标签页 URL、加载完成和标签切换，用户从 Shopify 首页进入商品页或 collection 页时自动刷新提示和主按钮，并清掉上一页面的临时采集状态。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有提醒。

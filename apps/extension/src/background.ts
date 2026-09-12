@@ -3,7 +3,6 @@ import './product-background';
 import './auth-background';
 async function initialize() {
   await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
-  await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 }
 
 // Register synchronously so service worker restarts retain listeners.
