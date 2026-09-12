@@ -68,6 +68,8 @@ const rows: Record<string, [string, string, string]> = {
   login: ['登录名', '登入名', 'Login'],
   password: ['密码', '密碼', 'Password'],
   newPassword: ['新密码', '新密碼', 'New password'],
+  confirmNewPassword: ['确认新密码', '確認新密碼', 'Confirm new password'],
+  passwordConfirmMismatch: ['两次新密码不一致', '兩次新密碼不一致', 'New passwords do not match'],
   createAdmin: ['创建管理员', '建立管理員', 'Create admin'],
   resetPassword: ['重置密码', '重設密碼', 'Reset password'],
   disable: ['停用', '停用', 'Disable'],

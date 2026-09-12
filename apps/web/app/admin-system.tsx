@@ -102,7 +102,13 @@ const sections: Section[] = [
 ];
 
 const blankAdmin = { login: '', email: '', password: '' };
-const blankSelfAccountForm = { login: '', email: '', currentPassword: '', newPassword: '' };
+const blankSelfAccountForm = {
+  login: '',
+  email: '',
+  currentPassword: '',
+  newPassword: '',
+  confirmNewPassword: '',
+};
 
 const blankTutorial: TutorialInput = {
   title: '',
@@ -260,6 +266,7 @@ export function AdminSystem({
       email: String(account.email ?? ''),
       currentPassword: '',
       newPassword: '',
+      confirmNewPassword: '',
     });
     setAccountSaved(false);
     setAccountModalOpen(true);
@@ -279,6 +286,9 @@ export function AdminSystem({
             ? undefined
             : selfAccountForm.email,
         newPassword: selfAccountForm.newPassword || undefined,
+        confirmNewPassword: selfAccountForm.newPassword
+          ? selfAccountForm.confirmNewPassword
+          : undefined,
       },
       'PATCH',
     );
@@ -288,6 +298,7 @@ export function AdminSystem({
       email: String(updated.email ?? ''),
       currentPassword: '',
       newPassword: '',
+      confirmNewPassword: '',
     });
     setAccountSaved(true);
     await refreshMe();
@@ -1067,18 +1078,28 @@ function AccountSettingsModal({
   open: boolean;
   busy: boolean;
   account: DataRow | null;
-  form: { login: string; email: string; currentPassword: string; newPassword: string };
+  form: {
+    login: string;
+    email: string;
+    currentPassword: string;
+    newPassword: string;
+    confirmNewPassword: string;
+  };
   setForm: (value: {
     login: string;
     email: string;
     currentPassword: string;
     newPassword: string;
+    confirmNewPassword: string;
   }) => void;
   saved: boolean;
   onSave: () => void;
   onClose: () => void;
 }) {
   const t = (k: string) => adminText(locale, k);
+  const passwordMismatch = Boolean(
+    form.newPassword && form.confirmNewPassword && form.newPassword !== form.confirmNewPassword,
+  );
   return (
     <Modal
       title={t('currentAdminAccount')}
@@ -1143,12 +1164,29 @@ function AccountSettingsModal({
               onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
             />
           </Form.Item>
+          <Form.Item
+            label={t('confirmNewPassword')}
+            validateStatus={passwordMismatch ? 'error' : undefined}
+            help={passwordMismatch ? t('passwordConfirmMismatch') : undefined}
+          >
+            <Input.Password
+              minLength={8}
+              value={form.confirmNewPassword}
+              placeholder={t('leaveBlankNoChange')}
+              autoComplete="new-password"
+              onChange={(e) => setForm({ ...form, confirmNewPassword: e.target.value })}
+            />
+          </Form.Item>
           <Space>
             <Button
               type="primary"
               htmlType="submit"
               loading={busy}
-              disabled={!form.currentPassword}
+              disabled={
+                !form.currentPassword ||
+                passwordMismatch ||
+                Boolean(form.newPassword && !form.confirmNewPassword)
+              }
             >
               {t('saveAccount')}
             </Button>

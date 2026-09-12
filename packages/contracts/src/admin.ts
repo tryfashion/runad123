@@ -72,9 +72,14 @@ export const adminSelfAccountInputSchema = z
       .transform((value) => value.toLowerCase())
       .optional(),
     newPassword: z.string().min(8).max(256).optional(),
+    confirmNewPassword: z.string().min(8).max(256).optional(),
   })
   .refine((value) => value.login || value.email || value.newPassword, {
     message: 'NO_ACCOUNT_CHANGE',
+  })
+  .refine((value) => !value.newPassword || value.newPassword === value.confirmNewPassword, {
+    message: 'PASSWORD_CONFIRM_MISMATCH',
+    path: ['confirmNewPassword'],
   });
 export type Tutorial = z.infer<typeof tutorialSchema>;
 
