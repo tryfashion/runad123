@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-13 插件未授权站点识别提示修复：当前页不是明显商品/collection URL 且没有站点权限时，产品页显示“允许识别当前网站”按钮；授权后立即重新识别 Shopify 首页或非 Shopify 页面，避免重新加载插件后界面仍停留在旧默认提示。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有提醒。
+
 - 2026-09-13 插件当前标签页变化刷新：产品页不再只在侧栏打开时识别一次；监听当前标签页 URL、加载完成和标签切换，用户从 Shopify 首页进入商品页或 collection 页时自动刷新提示和主按钮，并清掉上一页面的临时采集状态。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有提醒。
 
 - 2026-09-13 插件 Shopify 页面类型采集提示调整：产品页按当前标签页分为 Shopify 首页/普通页、collection 页、商品页和非 Shopify 页；首页/普通页按钮为下载本站全部商品，collection 页为下载本 collection 全部商品，商品页为下载当前商品；非 Shopify 页不显示采集按钮，只显示后台配置的选品网站推荐。首页/普通页全站下载复用 Shopify `/products.json?limit=50`，保持首版最多 50 个商品限制。已执行 lint、typecheck、@runad123/extension build、@runad123/web build 通过；Web 构建仍有既有 Next Windows SWC 回退 WASM 警告，插件构建仍有 sidepanel chunk 超 500k 的既有提醒。
@@ -263,6 +265,7 @@
 - 先做可运行纵向流程，再补细节；以测试结果推进，避免一次生成所有模块后再集中修错。
 - 出现契约不一致时先修正最小规格冲突并记录；遇到鉴权、CSV 实际导入或并发计费问题时集中复核。
 - 模型推理档位不作为质量保障；关键验收和真实集成结果才决定阶段是否完成。
+
 
 
 

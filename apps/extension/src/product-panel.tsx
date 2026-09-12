@@ -6,7 +6,7 @@ import type { RiskStatus } from '@runad123/contracts/risk';
 import { RewritePanel } from './rewrite-panel';
 import { RiskPanel } from './risk-panel';
 import { z } from 'zod';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { sourcingSitesResponseSchema, type SourcingSite } from '@runad123/contracts/admin';
 import { readWebsite } from './website-overview';
 import {
@@ -47,8 +47,9 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
   const [risk, setRisk] = useState<RiskStatus | null>(null);
   const [autoRisk, setAutoRisk] = useState(false);
   const [pageState, setPageState] = useState<
-    'unknown' | 'non-shopify' | 'shopify-home' | 'collection' | 'product'
+    'unknown' | 'permission-needed' | 'non-shopify' | 'shopify-home' | 'collection' | 'product'
   >('unknown');
+  const activeUrlRef = useRef('');
   const [sourcingSites, setSourcingSites] = useState<SourcingSite[]>([]);
   const [target, setTarget] = useState(''),
     [language, setLanguage] = useState<PreparedRevision['language']>('preserve'),
@@ -87,54 +88,52 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
     });
     setDirty(false);
   }
-  useEffect(() => {
-    let activeUrl = '';
-    async function refreshPageState(tab?: chrome.tabs.Tab) {
-      const current =
-        tab ?? (await chrome.tabs.query({ active: true, currentWindow: true })).find(Boolean);
-      if (current?.id === undefined || !current.url || !/^https?:/.test(current.url)) {
-        setPageState('unknown');
-        return;
-      }
-      if (current.url !== activeUrl) {
-        activeUrl = current.url;
-        setProduct(null);
-        setCollectionProducts([]);
-        setCollectionSummary(null);
-        setDraft(null);
-        setEdits(null);
-        setDirty(false);
-        setAutoRisk(false);
-        setMessage('');
-      }
-      try {
-        const url = new URL(current.url);
-        const productPage = /\/products\/[^/]+/.test(url.pathname);
-        const collectionPage = /\/collections(?:\/[^/?#]+)?\/?$/.test(url.pathname);
-        const [result] = await chrome.scripting.executeScript({
-          target: { tabId: current.id },
-          func: readWebsite,
-        });
-        setPageState(
-          result?.result?.shopify === false
-            ? 'non-shopify'
-            : productPage
-              ? 'product'
-              : collectionPage
-                ? 'collection'
-                : 'shopify-home',
-        );
-      } catch {
-        const path = new URL(current.url).pathname;
-        setPageState(
-          /\/products\/[^/]+/.test(path)
-            ? 'product'
-            : /\/collections(?:\/[^/?#]+)?\/?$/.test(path)
-              ? 'collection'
-              : 'unknown',
-        );
-      }
+  async function refreshPageState(tab?: chrome.tabs.Tab) {
+    const current =
+      tab ?? (await chrome.tabs.query({ active: true, currentWindow: true })).find(Boolean);
+    if (current?.id === undefined || !current.url || !/^https?:/.test(current.url)) {
+      setPageState('unknown');
+      return;
     }
+    if (current.url !== activeUrlRef.current) {
+      activeUrlRef.current = current.url;
+      setProduct(null);
+      setCollectionProducts([]);
+      setCollectionSummary(null);
+      setDraft(null);
+      setEdits(null);
+      setDirty(false);
+      setAutoRisk(false);
+      setMessage('');
+    }
+    const url = new URL(current.url);
+    const productPage = /\/products\/[^/]+/.test(url.pathname);
+    const collectionPage = /\/collections(?:\/[^/?#]+)?\/?$/.test(url.pathname);
+    try {
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId: current.id },
+        func: readWebsite,
+      });
+      setPageState(
+        result?.result?.shopify === false
+          ? 'non-shopify'
+          : productPage
+            ? 'product'
+            : collectionPage
+              ? 'collection'
+              : 'shopify-home',
+      );
+    } catch {
+      setPageState(productPage ? 'product' : collectionPage ? 'collection' : 'permission-needed');
+    }
+  }
+  async function allowCurrentSite() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.url || !/^https?:/.test(tab.url)) return;
+    const origin = new URL(tab.url).origin + '/*';
+    if (await chrome.permissions.request({ origins: [origin] })) await refreshPageState(tab);
+  }
+  useEffect(() => {
     const updated: Parameters<typeof chrome.tabs.onUpdated.addListener>[0] = (
       _tabId,
       change,
@@ -332,17 +331,21 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
   const emptyTitle =
     pageState === 'non-shopify'
       ? ui('nonShopifyTitle')
-      : pageState === 'shopify-home' || pageState === 'collection'
-        ? ui('shopifyStoreTitle')
-        : ui('ready');
+      : pageState === 'permission-needed'
+        ? ui('permissionTitle')
+        : pageState === 'shopify-home' || pageState === 'collection'
+          ? ui('shopifyStoreTitle')
+          : ui('ready');
   const emptyHint =
     pageState === 'non-shopify'
       ? ui('sourcingPrompt')
-      : pageState === 'collection'
-        ? ui('downloadCollectionProducts')
-        : pageState === 'shopify-home'
-          ? ui('shopifyStoreHint')
-          : ui('hint');
+      : pageState === 'permission-needed'
+        ? ui('permissionHint')
+        : pageState === 'collection'
+          ? ui('downloadCollectionProducts')
+          : pageState === 'shopify-home'
+            ? ui('shopifyStoreHint')
+            : ui('hint');
   const primaryAction = pageState === 'product' ? collect : collectCollection;
   const primaryLabel =
     pageState === 'collection'
@@ -380,6 +383,15 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
             </div>
             <h2>{emptyTitle}</h2>
             <p>{emptyHint}</p>
+            {pageState === 'permission-needed' && (
+              <button
+                className="secondary-button"
+                disabled={busy}
+                onClick={() => void run(allowCurrentSite)}
+              >
+                {ui('allowCurrentSite')}
+              </button>
+            )}
             {pageState === 'non-shopify' && sourcingSites.length > 0 && (
               <div className="sourcing-sites">
                 {sourcingSites.map((site) => (
@@ -410,7 +422,7 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
             </div>
           </div>
         )}
-        {pageState !== 'non-shopify' && (
+        {!['non-shopify', 'permission-needed'].includes(pageState) && (
           <button
             className="collect-button"
             disabled={busy}
@@ -420,7 +432,9 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
             {primaryLabel}
           </button>
         )}
-        {!product && pageState !== 'non-shopify' && <p className="local-hint">{ui('local')}</p>}
+        {!product && !['non-shopify', 'permission-needed'].includes(pageState) && (
+          <p className="local-hint">{ui('local')}</p>
+        )}
         {busy && tabId !== undefined && (
           <button
             onClick={() => void request({ action: 'cancelCollect', tabId }).catch(() => undefined)}
