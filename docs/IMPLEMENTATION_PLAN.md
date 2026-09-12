@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-13 临时生产域名根路径调整：`/` 不再展示通用占位工作台，改为服务端跳转到 `/admin/login`，保留 lang 查询参数，方便 ads.zhouerp.com 直接进入后台。已执行 lint、typecheck、@runad123/web build 通过；Web 构建仍有既有 Next Windows SWC 回退 WASM 警告。
+
 - 2026-09-13 后台当前管理员修改密码补充确认新密码：右上角账号弹窗新增确认新密码输入；前端阻止两次不一致提交，服务端 adminSelfAccountInputSchema 同步校验 confirmNewPassword。已执行 lint、typecheck、@runad123/web build 通过；Web 构建仍有既有 Next Windows SWC 回退 WASM 警告。
 
 - 2026-09-13 后台当前管理员账号修改入口调整：从系统设置页移到右上角用户头像按钮弹窗，当前密码放在表单最前面，系统设置页只保留系统配置与额度配置。已执行 lint、typecheck、@runad123/web build 通过；Web 构建仍有既有 Next Windows SWC 回退 WASM 警告。
@@ -255,6 +257,7 @@
 - 先做可运行纵向流程，再补细节；以测试结果推进，避免一次生成所有模块后再集中修错。
 - 出现契约不一致时先修正最小规格冲突并记录；遇到鉴权、CSV 实际导入或并发计费问题时集中复核。
 - 模型推理档位不作为质量保障；关键验收和真实集成结果才决定阶段是否完成。
+
 
 
 
