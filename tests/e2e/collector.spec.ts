@@ -3,6 +3,26 @@ import { readFileSync } from 'node:fs';
 import { collectPage } from '../../apps/extension/src/collect-page.js';
 import { normalizeShopify } from '../../packages/product-core/src/index.js';
 const raw = readFileSync('tests/fixtures/shopify-ajax-multi.json', 'utf8');
+type CollectedProductPayload = {
+  raw: string;
+  pageUrl: string;
+  currency: string;
+  method: 'ajax_js' | 'product_json';
+  verifiedFallbackCurrency?: string;
+};
+function collected(result: Awaited<ReturnType<typeof collectPage>>): CollectedProductPayload {
+  const value = result as Partial<CollectedProductPayload> & { error?: string };
+  expect(value.error).toBeUndefined();
+  if (!value.raw || !value.pageUrl || !value.currency || !value.method)
+    throw new Error('collector returned incomplete data');
+  return {
+    raw: value.raw,
+    pageUrl: value.pageUrl,
+    currency: value.currency,
+    method: value.method,
+    verifiedFallbackCurrency: value.verifiedFallbackCurrency,
+  };
+}
 test('isolated collector extracts only product data and currency from fixture storefront', async ({
   page,
 }) => {
@@ -24,8 +44,7 @@ test('isolated collector extracts only product data and currency from fixture st
   await page.goto(
     'https://fixture.example/fr/products/runad123-probe-trail-mug?variant=9007199254740995',
   );
-  const result = await page.evaluate(collectPage);
-  expect(result.error).toBeUndefined();
+  const result = collected(await page.evaluate(collectPage));
   expect(JSON.stringify(result)).not.toContain('cart-private-marker');
   const product = normalizeShopify(result.raw!, {
     pageUrl: result.pageUrl!,
@@ -57,7 +76,7 @@ test('collector detects currency changes and refuses unverified JSON fallback', 
   await page.goto('https://fixture.example/products/runad123-probe-trail-mug');
   expect((await page.evaluate(collectPage)).error).toBe('CURRENCY_CHANGED');
   change = false;
-  const result = await page.evaluate(collectPage);
+  const result = collected(await page.evaluate(collectPage));
   expect(result.method).toBe('product_json');
   expect(() =>
     normalizeShopify(result.raw!, {

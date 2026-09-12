@@ -51,6 +51,12 @@ test('packaged extension runs and remembers language after restart', async () =>
     await page.goto(`chrome-extension://${id}/sidepanel.html`);
     await page.getByRole('combobox').selectOption('zh-Hant');
     await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hant');
+    await expect(page.locator('.account')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '擷取目前商品', exact: true })).toBeEnabled();
+    expect(await worker.evaluate(async () => !!(await chrome.storage.local.get('auth')).auth)).toBe(
+      false,
+    );
+    await page.getByRole('button', { name: '教學', exact: true }).click();
     await expect(page.getByRole('link', { name: 'Synthetic import tutorial ↗' })).toHaveAttribute(
       'href',
       'https://learn.example.com/import',
@@ -67,7 +73,7 @@ test('packaged extension runs and remembers language after restart', async () =>
         ),
       )
       .toBe('zh-Hant');
-    await expect(page.getByText('服務尚未設定或暫時無法使用。', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '產品', exact: true }).click();
     await page.setViewportSize({ width: 360, height: 780 });
     await page.screenshot({ path: 'artifacts/extension-panel.png', fullPage: true });
     expect(errors).toEqual([]);
@@ -76,8 +82,12 @@ test('packaged extension runs and remembers language after restart', async () =>
     const restored = await context.newPage();
     await restored.goto(`chrome-extension://${id}/sidepanel.html`);
     await expect(restored.getByRole('combobox')).toHaveValue('zh-Hant');
-    await expect(restored.getByRole('button', { name: '擷取商品 ↗', exact: true })).toBeDisabled();
-    await expect(restored.getByRole('button', { name: '免登入繼續', exact: true })).toBeDisabled();
+    await expect(restored.getByRole('button', { name: '擷取目前商品', exact: true })).toBeEnabled();
+    await expect(restored.locator('.account')).toHaveCount(0);
+    await restored.getByRole('link', { name: '帳號 / 登入' }).click();
+    await expect(restored.locator('.account')).toBeVisible();
+    await restored.getByRole('button', { name: '← 返回產品' }).click();
+    await expect(restored.locator('.account')).toHaveCount(0);
     await restored.getByRole('combobox').selectOption('auto');
     await expect(restored.getByRole('combobox')).toHaveValue('auto');
   } finally {

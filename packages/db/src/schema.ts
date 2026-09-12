@@ -164,6 +164,21 @@ export const audits = mysqlTable(
   },
   (t) => [index('audit_user_created').on(t.adminUserId, t.createdAt)],
 );
+export const adminCredentials = mysqlTable(
+  'admin_credentials',
+  {
+    userId: id('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    loginNormalized: varchar('login_normalized', { length: 254 }).notNull(),
+    passwordSalt: binary('password_salt', { length: 16 }).notNull(),
+    passwordHash: binary('password_hash', { length: 64 }).notNull(),
+    passwordVersion: varchar('password_version', { length: 32 }).notNull(),
+    createdAt: created(),
+    updatedAt: updated(),
+  },
+  (t) => [uniqueIndex('admin_credentials_login').on(t.loginNormalized)],
+);
 
 export const sourceStores = mysqlTable(
   'source_stores',
@@ -548,6 +563,7 @@ export const dailyStats = mysqlTable(
   (t) => [uniqueIndex('daily_product_day').on(t.dayUtc, t.productId)],
 );
 export const tables = {
+  adminCredentials,
   tutorials,
   deletions,
   dailyStats,

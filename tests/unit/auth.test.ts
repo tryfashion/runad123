@@ -7,6 +7,7 @@ import {
   secretToken,
   digest,
   createAuthHandler,
+  hashAdminPassword,
 } from '../../packages/server-core/src/index.js';
 import { MemoryAuthStore } from '../support/memory-auth-store.js';
 import { consentVersion, emailStartInput } from '../../packages/contracts/src/auth.js';
@@ -391,6 +392,80 @@ describe('M1 HTTP transport — transaction model', () => {
     ).resolves.toBeDefined();
     expect(f.store.rows.audits).toHaveLength(2);
   });
+  it('supports admin password login without SMTP and rejects non-admin credentials', async () => {
+    const f = setup(),
+      login = await f.login(undefined, false, 'admin@example.com', 'web');
+    f.store.rows.users[0]!.role = 'admin';
+    const password = await hashAdminPassword('StrongPass123');
+    await f.store.transaction((tx) =>
+      tx.insert('adminCredentials', {
+        userId: login.user.id,
+        loginNormalized: 'admin@example.com',
+        passwordSalt: password.salt,
+        passwordHash: password.hash,
+        passwordVersion: password.version,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+    await expect(
+      f.service.adminPasswordLogin({ login: 'admin@example.com', password: 'wrong-pass' }, 'ip'),
+    ).rejects.toMatchObject({ code: 'ADMIN_LOGIN_FAILED' });
+    f.store.rows.users[0]!.role = 'user';
+    await expect(
+      f.service.adminPasswordLogin({ login: 'admin@example.com', password: 'StrongPass123' }, 'ip'),
+    ).rejects.toMatchObject({ code: 'ADMIN_LOGIN_FAILED' });
+    f.store.rows.users[0]!.role = 'admin';
+    const result = await f.service.adminPasswordLogin(
+      { login: 'admin@example.com', password: 'StrongPass123' },
+      'ip',
+    );
+    expect(result.user.role).toBe('admin');
+    expect(f.store.rows.sessions.at(-1)!.kind).toBe('web');
+  });
+
+  it('admin password HTTP login sets only the web session cookie', async () => {
+    const f = setup(),
+      login = await f.login(undefined, false, 'admin@example.com', 'web');
+    f.store.rows.users[0]!.role = 'admin';
+    const password = await hashAdminPassword('StrongPass123');
+    await f.store.transaction((tx) =>
+      tx.insert('adminCredentials', {
+        userId: login.user.id,
+        loginNormalized: 'admin@example.com',
+        passwordSalt: password.salt,
+        passwordHash: password.hash,
+        passwordVersion: password.version,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+    const handle = createAuthHandler(f.service, {
+      webOrigin: 'https://runad.example',
+      extensionIds: [],
+      production: true,
+    });
+    const csrfResponse = await handle(new Request('https://runad.example/api/v1/auth/csrf'));
+    const jar = csrfResponse.headers.get('set-cookie')!.split(';')[0]!,
+      csrf = (await csrfResponse.json()).data.csrfToken;
+    const response = await handle(
+      new Request('https://runad.example/api/v1/auth/admin/login', {
+        method: 'POST',
+        headers: {
+          Origin: 'https://runad.example',
+          Cookie: jar,
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrf,
+        },
+        body: JSON.stringify({ login: 'admin@example.com', password: 'StrongPass123' }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const cookies = response.headers.getSetCookie().join(' ');
+    expect(cookies.includes('__Host-runad-session')).toBe(true);
+    expect((await response.json()).data.user.role).toBe('admin');
+  });
+
   it('web login uses HttpOnly cookies and CSRF without JSON session leakage', async () => {
     const f = setup(),
       handle = createAuthHandler(f.service, {
@@ -502,4 +577,38 @@ describe('M1 HTTP transport — transaction model', () => {
     expect(response.status).toBe(503);
     expect((await response.text()).includes('private diagnostic')).toBe(false);
   });
+});
+
+it('accepts Chrome-assigned IDs only in explicit loopback preview, retaining auth', async () => {
+  const f = setup();
+  const dynamicOrigin = 'chrome-extension://' + 'p'.repeat(32);
+  const check = (
+    localPreview: boolean,
+    production: boolean,
+    webOrigin: string,
+    requestOrigin: string,
+    origin = dynamicOrigin,
+    route = '/config',
+    method = 'GET',
+  ) =>
+    createAuthHandler(f.service, { extensionIds: [], localPreview, production, webOrigin })(
+      new Request(requestOrigin + '/api/v1' + route, { method, headers: { Origin: origin } }),
+    );
+  const local = 'http://127.0.0.1:3000';
+  expect((await check(true, false, local, 'http://localhost:3000')).status).toBe(200);
+  const accepted = await check(true, false, local, local);
+  expect(accepted.status).toBe(200);
+  expect(accepted.headers.get('Access-Control-Allow-Origin')).toBe(dynamicOrigin);
+  expect((await check(true, false, local, local, dynamicOrigin, '/config', 'OPTIONS')).status).toBe(
+    204,
+  );
+  expect((await check(true, false, local, local, dynamicOrigin, '/me')).status).toBe(401);
+  expect((await check(false, false, local, local)).status).toBe(403);
+  expect((await check(true, true, local, local)).status).toBe(403);
+  expect((await check(true, false, 'https://runad.example', 'https://runad.example')).status).toBe(
+    403,
+  );
+  expect((await check(true, false, local, 'http://192.168.1.10:3000')).status).toBe(403);
+  expect((await check(true, false, local, local, 'https://example.com')).status).toBe(403);
+  expect((await check(true, false, local, local, dynamicOrigin + '.evil')).status).toBe(403);
 });

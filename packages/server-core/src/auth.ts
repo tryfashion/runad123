@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID, scrypt as scryptCallback } from 'node:crypto';
 import { z } from 'zod';
 import { accessModeSchema } from '@runad123/contracts';
 import {
@@ -7,6 +7,7 @@ import {
   emailStartInput,
   emailVerifyInput,
   settingsInput,
+  adminPasswordLoginInput,
   type PublicUser,
 } from '@runad123/contracts/auth';
 import type { AuthStore, AuthTransaction, Rows } from '@runad123/db';
@@ -14,6 +15,35 @@ import type { Mailer } from './mail.js';
 import { digest, hmac, same, secretToken, validToken, ServiceError } from './security.js';
 
 const DAY = 86400000;
+export const ADMIN_PASSWORD_VERSION = 'scrypt-v1';
+function scryptHash(password: string, salt: NodeJS.ArrayBufferView) {
+  return new Promise<Buffer>((resolve, reject) =>
+    scryptCallback(
+      password,
+      Buffer.from(salt.buffer, salt.byteOffset, salt.byteLength),
+      64,
+      { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 },
+      (error, derivedKey) => (error ? reject(error) : resolve(Buffer.from(derivedKey))),
+    ),
+  );
+}
+export async function hashAdminPassword(
+  password: string,
+  salt: NodeJS.ArrayBufferView = randomBytes(16),
+) {
+  const normalizedSalt = Buffer.from(salt.buffer, salt.byteOffset, salt.byteLength);
+  const hash = await scryptHash(password, normalizedSalt);
+  return { salt: normalizedSalt, hash, version: ADMIN_PASSWORD_VERSION };
+}
+async function verifyAdminPassword(
+  password: string,
+  salt: NodeJS.ArrayBufferView,
+  expected: NodeJS.ArrayBufferView,
+) {
+  if (salt.byteLength !== 16 || expected.byteLength !== 64) return false;
+  const computed = await hashAdminPassword(password, salt);
+  return same(computed.hash, expected);
+}
 export type Principal = {
   session: Rows['sessions'];
   user: Rows['users'] | null;
@@ -390,6 +420,60 @@ export class AuthService {
     });
     if ('error' in result) throw result.error;
     return result;
+  }
+  async adminPasswordLogin(input: z.infer<typeof adminPasswordLoginInput>, ip: string) {
+    input = adminPasswordLoginInput.parse(input);
+    await this.rate([
+      ['admin-login:ip:' + ip, 600, 30],
+      ['admin-login:login:' + input.login, 600, 10],
+    ]);
+    const found = await this.store.transaction(async (tx) => {
+      const credential = (await tx.find('adminCredentials', { loginNormalized: input.login }))[0];
+      const user = credential ? (await tx.find('users', { id: credential.userId }))[0] : null;
+      return { credential: credential ?? null, user: user ?? null };
+    });
+    if (
+      !found.credential ||
+      !found.user ||
+      found.user.role !== 'admin' ||
+      found.user.status !== 'active' ||
+      found.credential.passwordVersion !== ADMIN_PASSWORD_VERSION ||
+      !(await verifyAdminPassword(
+        input.password,
+        found.credential.passwordSalt,
+        found.credential.passwordHash,
+      ))
+    )
+      throw new ServiceError('ADMIN_LOGIN_FAILED', 401);
+    return this.store.transaction(async (tx) => {
+      const credential = (await tx.find('adminCredentials', { userId: found.user!.id }))[0];
+      const user = (await tx.find('users', { id: found.user!.id }))[0];
+      if (
+        !credential ||
+        !user ||
+        user.role !== 'admin' ||
+        user.status !== 'active' ||
+        credential.loginNormalized !== input.login ||
+        !same(credential.passwordSalt, found.credential!.passwordSalt) ||
+        !same(credential.passwordHash, found.credential!.passwordHash)
+      )
+        throw new ServiceError('ADMIN_LOGIN_FAILED', 401);
+      const now = this.now();
+      await tx.update('users', { id: user.id }, { lastLoginAt: now, updatedAt: now });
+      await tx.insert('audits', {
+        id: randomUUID(),
+        adminUserId: user.id,
+        action: 'admin.password_login',
+        targetType: 'users',
+        targetId: user.id,
+        beforeJson: null,
+        afterJson: { login: input.login },
+        requestId: randomUUID(),
+        createdAt: now,
+      });
+      const credentialResult = await this.issue(tx, 'web', null, user.id);
+      return { credential: credentialResult, user: publicUser(user), clientKind: 'web' as const };
+    });
   }
   async logout(token?: string) {
     return this.store.transaction(async (tx) => {

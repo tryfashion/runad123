@@ -20,9 +20,22 @@
 10. [M3 验证与 AI 接入](docs/M3_VALIDATION.md)：持久任务、额度、DeepSeek 配置和验证缺口。
 11. [M4 验证与改写接入](docs/M4_VALIDATION.md)：单字段改写、对比确认、共享预算和真实验证缺口。
 12. [M5 验证记录](docs/M5_VALIDATION.md)：CSV、许可、真实浏览器下载和导入验证缺口。
-13. [M6 验证与使用](docs/M6_VALIDATION.md)：教程、统计后台、删除/保留策略、真实 MySQL 证据与剩余接入项。
+13. [M6 验证与使用](docs/M6_VALIDATION.md)：教程、统计后台、删除/保留策略、真实 MySQL 证据与剩余接入项。`r`n14. [宝塔临时部署](docs/BAOTA_DEPLOY.md)：使用 `ads.zhouerp.com` 作为临时域名部署网站/API、worker 和插件 API origin。
 
 ## Windows 本地运行
+
+日常只需两个 BAT，双击后保留黑色窗口：
+
+| 文件 | 用途 |
+| --- | --- |
+| `start-frontend.bat` | 构建网页依赖和 Chrome 插件，运行网站/API；就绪后打开后台登录页 |
+| `start-backend.bat` | 构建并运行后台 worker，处理持久任务和维护 |
+
+两个都打开即可，顺序不限；关闭哪个窗口，就停止该窗口对应服务。重启时关闭后再次双击。输出直接显示在窗口，不再使用后台驻留管理器或额外的停止、状态、日志 BAT。前端地址为 `http://127.0.0.1:3000`，插件加载 `apps/extension/dist`；重建后在 Chrome 扩展管理页刷新插件。
+
+沿用 Next.js 网页/API 一体架构，“后端服务”窗口负责 Node worker，不另拆 API 服务。两个窗口使用按项目区分的互斥锁防止重复运行，构建依次执行避免共享包同时写入。Windows Job Object 在窗口进程结束时终止其子进程，避免留下 Next 子进程占用端口，不结束其他项目或本地 MySQL 服务。关闭窗口属于直接停止；后台在途任务按既有租约机制恢复。
+
+端口 3000 被别的程序占用时拒绝启动，不自动改端口或关闭其他项目。需要 Node 24.13+（24.x）和已安装的锁定依赖，不自动安装依赖或迁移数据库。`.env` 的 WEB_ORIGIN 和已设置的 RUNAD_API_ORIGIN 应与上述网址一致。预览模式保留 AI 禁用。浏览器验收前先关闭两个窗口，再按测试要求构建。
 
 使用 Node 24（本机已验证 24.13.0）。在项目根目录打开 PowerShell，安装锁定依赖：
 
@@ -93,7 +106,7 @@ npx --yes pnpm@9.15.4 run db:migrate
 npx --yes pnpm@9.15.4 run admin:bootstrap
 ```
 
-第二个命令还需要在 `.env` 填 ADMIN_EMAIL，只允许初始化首个管理员；无密码后门，之后仍通过邮箱验证码登录。MAIL_MODE=smtp 时需要 SMTP_HOST/PORT/USER/PASSWORD/FROM；默认 disabled。memory 仅用于自动化开发测试，不写验证码日志、不提供公开收件箱，不能打开强制登录开关。
+第二个命令需要在 `.env` 填 ADMIN_EMAIL 和 ADMIN_PASSWORD，用于初始化或更新内部管理员密码登录；不输出密码、不写入仓库。管理员从 `/admin/login` 使用账号密码登录后台。普通用户/插件账号仍沿用邮箱验证码；MAIL_MODE=smtp 时需要 SMTP_HOST/PORT/USER/PASSWORD/FROM；默认 disabled。memory 仅用于自动化开发测试，不写验证码日志、不提供公开收件箱，不能打开强制登录开关。
 
 数据库集成测试使用单独 `.env.test` 的 MYSQL_TEST_URL，数据库名限定 `runad123_test` 或 `runad123_test_小写字母数字后缀`。测试会在该库迁移并留下测试记录，不自动删除数据库：
 
@@ -125,4 +138,26 @@ settings.ai_rewrite 默认关闭。配置前核验供应商模型、上下文和
 - `/account` 或插件账号区可申请删除个人采集/AI 数据；需要显式确认，由 worker 分批执行，保留账号，不删除其他用户采集及磁盘上已下载的 CSV。
 - `npx --yes pnpm@9.15.4 run test:mysql:m6` 仅用于隔离测试库，会用模拟时钟清理该库到期的测试记录，不能用于业务库。
 
-当前主库已完成 0006。AUTH_SECRET、插件来源 ID、DeepSeek 和 SMTP 仍缺配置；页面可构建，但不能把模拟登录/模型测试当真实服务接通。详细验证、保留期和待办见 M6_VALIDATION。
+当前主库已完成 0006。本地 AUTH_SECRET 与后台连接已配置；本地预览不需要填写插件 ID，DeepSeek 和 SMTP 仍待接入。详细验证、保留期和待办见 M6_VALIDATION。
+
+## 本地预览（暂不接入 AI）
+
+本机配置完成后，双击 `start-frontend.bat` 启动服务，就绪后打开 `http://127.0.0.1:3000/admin/login?lang=zh-Hans`。管理员需要先执行迁移和 `admin:bootstrap`，再用 `.env` 中的 ADMIN_EMAIL/ADMIN_PASSWORD 登录；不再通过本地桥自动免登录进入后台。LOCAL_PREVIEW_ENABLED=true 仍用于本地调试：禁用 BAT 管理进程中的 DeepSeek 密钥，并允许本地 Chrome 自动分配的扩展 ID 调试。
+
+首次本地预览配置命令为 `node scripts/setup-local-preview.mjs`，需先在忽略提交的 `.env` 填好本地 MYSQL_URL 和 WEB_ORIGIN。它补齐空的 AUTH_SECRET，并启用本地预览；不执行数据库迁移。修改后关闭两个窗口，再重新双击启动。预览模式下 BAT 管理的进程禁用 DeepSeek 密钥；以后接入 AI 时先关闭该模式，再按 M3/M4 说明配置。
+
+Chrome 打开 `chrome://extensions`，开启开发者模式，加载 `D:\aiproject\runad123\apps\extension\dist`。首次打开直接显示产品首页；打开 Shopify **商品详情页**，点击采集即可本地预览，无需先登录。选择目标国家后，点击带数据使用说明的“创建草稿”按钮才建立匿名身份并上传。账号表单位于右上角“账号 / 登录”的独立视图。可以查看界面、编辑草稿、查看后台统计和管理教程。AI 风险检查、改写及依赖有效检查的正式 CSV 导出保持不可用；SMTP 登录也仍待接入。插件不设置 manifest key，ID 由 Chrome 自动分配；本机预览无需填写 CHROME_EXTENSION_IDS，正式环境仍使用准确的 ID 白名单。
+
+本地连接冒烟：服务运行时执行 `node --env-file-if-exists=.env --import tsx scripts/test-local-preview.ts`。它使用独立 Chromium 和真实本地库，会产生一条匿名测试安装及本地管理员登录审计，不创建商品或调用 AI；不会把模拟数据注入统计榜单。
+
+
+
+
+## 主题返利链接
+
+管理后台展开“主题返利链接”，添加主题名称、别名（每行一个）、HTTPS 返利网址，勾选启用并保存。完整推广参数原样保存。名称/别名按 NFKC 规范化、忽略大小写和多余空白后精确匹配；例如检测到 `Shine PRO 1.3.0`，可将它作为 `Shine PRO` 的别名，不自动将不相干的定制主题认作同一商品。
+
+插件网站概览先显示主题名，再异步向服务器查询链接；匹配已启用配置时主题名变成可点击推广链接，无匹配、停用或服务失败时保留普通文字。查询仅发送主题名称，不发送访问网站域名和商品内容，不要求用户注册。网站元信息仍按北京时间自然日缓存；返利链接单独查询且不持久缓存，管理员修改后下次进入概览即生效。链接标注推广用途，不自动访问商家网站。
+
+迁移 `0007_theme_links.sql` 为现有 settings 表添加空的 theme_links 配置，不新增数据库服务或业务表。主库已应用迁移，尚未配置真实返利网址。真实佣金归因需使用实际合作方提供的网址另行验证。
+

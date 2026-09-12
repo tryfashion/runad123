@@ -1,3 +1,6 @@
+import { panelText } from './panel-i18n';
+import { consentVersion } from '@runad123/contracts/auth';
+declare const __RUNAD_API_ORIGIN__: string;
 import { ExportPanel } from './export-panel';
 import type { RiskStatus } from '@runad123/contracts/risk';
 import { RewritePanel } from './rewrite-panel';
@@ -29,9 +32,14 @@ type Edits = {
   language: PreparedRevision['language'];
   exportSettings: PreparedRevision['exportSettings'];
 };
-export function ProductPanel({ locale }: { locale: UiLocale }) {
+export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccount: () => void }) {
+  const ui = (key: Parameters<typeof panelText>[1]) => panelText(locale, key);
   const t = (key: string) => productText(locale, key);
   const [product, setProduct] = useState<SourceProduct | null>(null),
+    [collectionProducts, setCollectionProducts] = useState<SourceProduct[]>([]),
+    [collectionSummary, setCollectionSummary] = useState<{ url?: string; failed: number } | null>(
+      null,
+    ),
     [draft, setDraft] = useState<PreparedRevision | null>(null),
     [edits, setEdits] = useState<Edits | null>(null);
   const [risk, setRisk] = useState<RiskStatus | null>(null);
@@ -41,7 +49,6 @@ export function ProductPanel({ locale }: { locale: UiLocale }) {
     [busy, setBusy] = useState(false),
     [tabId, setTabId] = useState<number>(),
     [message, setMessage] = useState(''),
-    [authorized, setAuthorized] = useState(false),
     [dirty, setDirty] = useState(false);
   async function request(message: unknown) {
     const result = await chrome.runtime.sendMessage(message);
@@ -63,6 +70,8 @@ export function ProductPanel({ locale }: { locale: UiLocale }) {
     const next = preparedRevisionSchema.parse(value);
     setDraft(next);
     setProduct(next.preparedProduct);
+    setCollectionProducts([]);
+    setCollectionSummary(null);
     setEdits({
       title: next.preparedProduct.title,
       descriptionHtml: next.preparedProduct.descriptionHtml,
@@ -74,7 +83,6 @@ export function ProductPanel({ locale }: { locale: UiLocale }) {
   }
   useEffect(() => {
     void chrome.storage.local.get(['auth', 'lastDraft', 'draftEdits']).then(async (stored) => {
-      setAuthorized(!!stored.auth);
       const last = localDraft.safeParse(stored.lastDraft);
       if (stored.auth && last.success) {
         await run(async () => {
@@ -102,6 +110,8 @@ export function ProductPanel({ locale }: { locale: UiLocale }) {
     const changed = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area === 'local' && changes.dataDeletionRequested) {
         setProduct(null);
+        setCollectionProducts([]);
+        setCollectionSummary(null);
         setDraft(null);
         setEdits(null);
         setDirty(false);
@@ -109,12 +119,14 @@ export function ProductPanel({ locale }: { locale: UiLocale }) {
         return;
       }
       if (area !== 'local' || !changes.auth) return;
-      setAuthorized(!!changes.auth.newValue);
+      if (!changes.auth.oldValue && changes.auth.newValue) return;
       if (
         authMarker.safeParse(changes.auth.oldValue).data?.active?.token !==
         authMarker.safeParse(changes.auth.newValue).data?.active?.token
       ) {
         setProduct(null);
+        setCollectionProducts([]);
+        setCollectionSummary(null);
         setDraft(null);
         setEdits(null);
         setAutoRisk(false);
@@ -165,14 +177,49 @@ export function ProductPanel({ locale }: { locale: UiLocale }) {
     setTabId(tab.id);
     const result = await request({ action: 'collect', tabId: tab.id });
     setProduct(result.product);
+    setCollectionProducts([]);
+    setCollectionSummary(null);
     setDraft(null);
     setEdits(null);
     setDirty(false);
     await chrome.storage.local.remove(['pendingCapture', 'draftEdits', 'lastDraft']);
     setMessage('complete');
   }
+  async function collectCollection() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id === undefined || !tab.url) throw new Error('UNSUPPORTED_COLLECTION');
+    if (!(await chrome.permissions.request({ origins: [new URL(tab.url).origin + '/*'] })))
+      throw new Error('SITE_PERMISSION_REQUIRED');
+    setTabId(tab.id);
+    const result = await request({ action: 'collectCollection', tabId: tab.id });
+    const products = z.array(captureInput.shape.product).parse(result.products);
+    setProduct(products[0] ?? null);
+    setCollectionProducts(products);
+    setCollectionSummary({ url: result.collectionUrl, failed: Number(result.failed ?? 0) });
+    setDraft(null);
+    setEdits(null);
+    setDirty(false);
+    await chrome.storage.local.remove(['pendingCapture', 'draftEdits', 'lastDraft']);
+    setMessage('collectionComplete');
+  }
+  async function downloadLocalCsv(items: SourceProduct[]) {
+    if (!items.length) return;
+    await request({ action: 'downloadCollectionCsv', products: items });
+    setMessage('csvDownloaded');
+  }
   async function submit() {
     if (!product) return;
+    const status = await request({ action: 'status' });
+    if (!status.me) {
+      await request({
+        action: 'install',
+        input: {
+          extensionVersion: chrome.runtime.getManifest().version,
+          consentVersion,
+          consentAccepted: true,
+        },
+      });
+    }
     const input = { product, draftContext: { targetCountry: target, language } };
     const parsed = pendingSchema.safeParse(
       (await chrome.storage.local.get('pendingCapture')).pendingCapture,
@@ -210,9 +257,63 @@ export function ProductPanel({ locale }: { locale: UiLocale }) {
   return (
     <section className="product-editor">
       <fieldset disabled={busy}>
-        <button disabled={busy || !authorized} onClick={() => void run(collect)}>
-          {t('collect')} ↗
+        {!product && (
+          <div className="product-empty">
+            <div className="product-illustration" aria-hidden="true">
+              <svg viewBox="0 0 72 72" fill="none">
+                <rect
+                  x="12"
+                  y="17"
+                  width="48"
+                  height="42"
+                  rx="8"
+                  fill="white"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+                <path
+                  d="M27 25v-7a9 9 0 0 1 18 0v7M28 39l6 6 12-13"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <h2>{ui('ready')}</h2>
+            <p>{ui('hint')}</p>
+          </div>
+        )}
+        {product && (
+          <div className="product-summary">
+            {product.images[0] ? (
+              <img
+                src={product.images[0].url}
+                alt={product.images[0].alt || ui('image')}
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="image-placeholder">{ui('noImage')}</div>
+            )}
+            <div>
+              <span className="eyebrow">{ui('preview')}</span>
+              <h2>{product.title}</h2>
+              <span>{product.source.storeHost}</span>
+            </div>
+          </div>
+        )}
+        <button className="collect-button" disabled={busy} onClick={() => void run(collect)}>
+          <span aria-hidden="true">↓ </span>
+          {product ? ui('recollect') : ui('collect')}
         </button>
+        <button
+          className="secondary-button"
+          disabled={busy}
+          onClick={() => void run(collectCollection)}
+        >
+          {ui('collectCollection')}
+        </button>
+        {!product && <p className="local-hint">{ui('local')}</p>}
         {busy && tabId !== undefined && (
           <button
             onClick={() => void request({ action: 'cancelCollect', tabId }).catch(() => undefined)}
@@ -221,6 +322,33 @@ export function ProductPanel({ locale }: { locale: UiLocale }) {
           </button>
         )}
         {message && <p role="status">{errorText}</p>}
+        {['LOGIN_REQUIRED', 'SESSION_EXPIRED'].includes(message) && (
+          <button className="back-link" onClick={onAccount}>
+            {ui('login')} →
+          </button>
+        )}
+        {collectionProducts.length > 0 && (
+          <div className="collection-summary">
+            <strong>{ui('collectionReady')}</strong>
+            <span>
+              {collectionProducts.length} {ui('productsFound')}
+              {collectionSummary?.failed
+                ? ' · ' + collectionSummary.failed + ' ' + ui('failed')
+                : ''}
+            </span>
+            {collectionSummary?.url && (
+              <a href={collectionSummary.url} target="_blank" rel="noreferrer">
+                {ui('sourceCollection')}
+              </a>
+            )}
+            <button
+              disabled={busy}
+              onClick={() => void run(() => downloadLocalCsv(collectionProducts))}
+            >
+              {ui('downloadCsv')}
+            </button>
+          </div>
+        )}
         {product && (
           <>
             <p>
@@ -233,9 +361,11 @@ export function ProductPanel({ locale }: { locale: UiLocale }) {
               {t('currency')}: {product.currency} · {t('variants')}: {product.variants.length} ·{' '}
               {t('images')}: {product.images.length}
             </p>
+            <button disabled={busy} onClick={() => void run(() => downloadLocalCsv([product]))}>
+              {ui('downloadCsv')}
+            </button>
             {!draft && (
               <>
-                <h2>{product.title}</h2>
                 <label>
                   {t('country')}
                   <input
@@ -256,6 +386,16 @@ export function ProductPanel({ locale }: { locale: UiLocale }) {
                     <option value="zh-Hant">繁體中文</option>
                   </select>
                 </label>
+                <p className="consent-note">
+                  {ui('consent')}{' '}
+                  <a
+                    href={__RUNAD_API_ORIGIN__ + '/privacy?lang=' + locale}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {ui('privacy')}
+                  </a>
+                </p>
                 <button
                   disabled={busy || !/^[A-Z]{2}$/.test(target)}
                   onClick={() => void run(submit)}

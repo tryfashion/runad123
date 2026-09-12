@@ -15,6 +15,7 @@ import {
 import {
   normalizeShopify,
   productCsv,
+  productsCsv,
   verifyExportHash,
 } from '../../packages/product-core/src/index.js';
 import { consentVersion } from '../../packages/contracts/src/auth.js';
@@ -176,6 +177,36 @@ it('maps variants/images/options and safely round-trips comma, quotes, unicode a
   expect(
     await verifyExportHash({ ...d, preparedProduct: { ...d.preparedProduct, title: 'tampered' } }),
   ).toBe(false);
+});
+it('combines multiple products into one Shopify CSV with one header', () => {
+  const first = prepareProduct(
+    source(),
+    { targetCountry: 'US', language: 'preserve' },
+    randomUUID(),
+    1,
+  );
+  const secondSource = source();
+  secondSource.source.shopifyProductId = '9007199254740999';
+  secondSource.source.handle = 'second-product';
+  secondSource.source.canonicalUrl = 'https://fixture.example/products/second-product';
+  secondSource.source.pageUrl = 'https://fixture.example/products/second-product';
+  secondSource.title = 'Second product';
+  const second = prepareProduct(
+    secondSource,
+    { targetCountry: 'US', language: 'preserve' },
+    randomUUID(),
+    1,
+  );
+  const rows = parseCsv(productsCsv([first, second]));
+  const header = rows[0]!;
+  expect(rows.filter((row) => row[0] === 'URL handle')).toHaveLength(1);
+  expect(rows.slice(1).filter((row) => row[header.indexOf('Title')])).toHaveLength(2);
+  expect(
+    rows
+      .slice(1)
+      .map((row) => row[header.indexOf('Title')])
+      .filter(Boolean),
+  ).toEqual([first.preparedProduct.title, second.preparedProduct.title]);
 });
 it.each(['JPY', 'KRW', 'USD'])(
   'preserves %s decimal strings and empty SKU without conversion',

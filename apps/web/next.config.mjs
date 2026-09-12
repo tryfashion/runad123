@@ -9,6 +9,7 @@ readEnvironment(process.env);
 
 export default {
   poweredByHeader: false,
+  agentRules: false,
   outputFileTracingRoot: root,
   transpilePackages: ['@runad123/contracts', '@runad123/server-core'],
 };

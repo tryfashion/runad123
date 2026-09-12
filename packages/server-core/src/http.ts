@@ -1,3 +1,4 @@
+import { ThemeLinkService } from './theme-links.js';
 import { AdminService } from './admin.js';
 import { ExportService } from './exports.js';
 import { randomUUID } from 'node:crypto';
@@ -7,6 +8,7 @@ import {
   emailStartInput,
   emailVerifyInput,
   settingsInput,
+  adminPasswordLoginInput,
 } from '@runad123/contracts/auth';
 import { AuthService } from './auth.js';
 import { RiskService } from './risk-service.js';
@@ -17,6 +19,7 @@ export interface HttpOptions {
   webOrigin: string;
   extensionIds: string[];
   production: boolean;
+  localPreview?: boolean;
   trustedIpHeader?: string;
 }
 export function createAuthHandler(service: AuthService, options: HttpOptions) {
@@ -46,7 +49,16 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
     try {
       const origin = request.headers.get('origin');
       const extensionOrigin =
-        !!origin && options.extensionIds.some((id) => origin === `chrome-extension://${id}`);
+        !!origin &&
+        (options.extensionIds.some((id) => origin === `chrome-extension://${id}`) ||
+          (options.localPreview === true &&
+            !options.production &&
+            options.webOrigin === 'http://127.0.0.1:3000' &&
+            ['http://127.0.0.1:3000', 'http://localhost:3000'].includes(
+              new URL(request.url).origin,
+            ) &&
+            (!request.headers.has('host') || request.headers.get('host') === '127.0.0.1:3000') &&
+            /^chrome-extension:\/\/[a-p]{32}$/.test(origin)));
       if (origin && origin !== options.webOrigin && !extensionOrigin)
         throw new ServiceError('FORBIDDEN', 403);
       if (extensionOrigin) {
@@ -76,9 +88,12 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
       if (
         extensionOrigin &&
         !bearer &&
-        !['/api/v1/config', '/api/v1/installations', '/api/v1/tutorials'].includes(
-          new URL(request.url).pathname,
-        )
+        ![
+          '/api/v1/config',
+          '/api/v1/installations',
+          '/api/v1/tutorials',
+          '/api/v1/theme-link',
+        ].includes(new URL(request.url).pathname)
       )
         throw new ServiceError('SESSION_EXPIRED', 401);
       if (bearer && origin === options.webOrigin) throw new ServiceError('FORBIDDEN', 403);
@@ -113,12 +128,20 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
           return new Response(null, { status: 304, headers });
         return send(data);
       }
+      if (request.method === 'GET' && path === '/theme-link')
+        return send(await new ThemeLinkService(service).lookup(query));
+      if (request.method === 'GET' && path === '/admin/theme-links')
+        return send(await new ThemeLinkService(service).config(token));
       if (request.method === 'GET' && path === '/admin/overview')
         return send(await admin.overview(token));
       if (request.method === 'GET' && path === '/admin/products/trending')
         return send(await admin.trending(query, token));
       if (request.method === 'GET' && path === '/admin/limits')
         return send(await admin.limits(token));
+      if (request.method === 'GET' && path === '/admin/admins')
+        return send(await admin.adminAccounts(token));
+      if (request.method === 'GET' && path === '/admin/permissions')
+        return send(await admin.permissions(token));
       if (request.method === 'GET' && path === '/admin/tutorials')
         return send(await admin.tutorials(query, true, token));
       if (request.method === 'GET' && path === '/me/data-deletion')
@@ -174,8 +197,18 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
           throw new ServiceError('CSRF_INVALID', 403);
       }
       const body = await readJson(request);
+      if (request.method === 'PATCH' && path === '/admin/theme-links')
+        return send(await new ThemeLinkService(service).save(body, token, requestId));
       if (request.method === 'PATCH' && path === '/admin/limits')
         return send(await admin.saveLimits(body, token, requestId));
+      if (request.method === 'POST' && path === '/admin/admins')
+        return send(await admin.createAdmin(body, token, requestId), 201);
+      const adminPassword = /^\/admin\/admins\/([a-f0-9-]{36})\/password$/.exec(path);
+      if (request.method === 'PATCH' && adminPassword)
+        return send(await admin.resetAdminPassword(adminPassword[1]!, body, token, requestId));
+      const adminUserStatus = /^\/admin\/users\/([a-f0-9-]{36})\/status$/.exec(path);
+      if (request.method === 'PATCH' && adminUserStatus)
+        return send(await admin.changeUserStatus(adminUserStatus[1]!, body, token, requestId));
       const tutorialWrite = /^\/admin\/tutorials(?:\/([a-f0-9-]{36}))?$/.exec(path);
       if (
         tutorialWrite &&
@@ -250,6 +283,13 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
         return send(await products.patch(draftMatch[1]!, body, token));
       if (path === '/installations' && request.method === 'POST')
         return send(await service.install(installationInput.parse(body), ip), 201);
+      if (path === '/auth/admin/login' && request.method === 'POST') {
+        if (bearer || extensionOrigin) throw new ServiceError('FORBIDDEN', 403);
+        const result = await service.adminPasswordLogin(adminPasswordLoginInput.parse(body), ip);
+        headers.append('Set-Cookie', cookie(sessionName, result.credential.token, 7 * 86400));
+        headers.append('Set-Cookie', cookie(preName, '', 0));
+        return send({ user: result.user, expiresAt: result.credential.expiresAt });
+      }
       if (path === '/sessions/renew' && request.method === 'POST')
         return send(await service.renew(token));
       if (path === '/auth/email/start' && request.method === 'POST') {

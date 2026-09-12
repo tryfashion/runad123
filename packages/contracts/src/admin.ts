@@ -35,6 +35,26 @@ export const trendQuerySchema = z.object({
   metric: z.enum(['export', 'capture']).default('export'),
   cursor: z.string().max(512).optional(),
 });
+export const adminUserStatusInputSchema = z.strictObject({
+  status: z.enum(['active', 'disabled']),
+});
+export const adminAccountInputSchema = z.strictObject({
+  login: z
+    .string()
+    .trim()
+    .min(3)
+    .max(254)
+    .transform((value) => value.toLowerCase()),
+  email: z
+    .string()
+    .trim()
+    .pipe(z.email().max(254))
+    .transform((value) => value.toLowerCase()),
+  password: z.string().min(8).max(256),
+});
+export const adminPasswordResetInputSchema = z.strictObject({
+  password: z.string().min(8).max(256),
+});
 export type Tutorial = z.infer<typeof tutorialSchema>;
 
 export const tutorialListSchema = z.object({
@@ -44,3 +64,8 @@ export const tutorialListSchema = z.object({
 export const limitsResponseSchema = limitsInputSchema.strip();
 export type Limits = z.infer<typeof limitsInputSchema>;
 export type TutorialInput = z.infer<typeof tutorialInputSchema>;
+export type AdminUserStatusInput = z.infer<typeof adminUserStatusInputSchema>;
+export type AdminAccountInput = z.infer<typeof adminAccountInputSchema>;
+export type AdminPasswordResetInput = z.infer<typeof adminPasswordResetInputSchema>;
+
+export * from './theme-links.js';

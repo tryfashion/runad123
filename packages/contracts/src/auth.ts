@@ -28,6 +28,15 @@ export const settingsInput = z.strictObject({
   accessMode: accessModeSchema,
   expectedVersion: z.number().int().positive(),
 });
+export const adminPasswordLoginInput = z.strictObject({
+  login: z
+    .string()
+    .trim()
+    .min(3)
+    .max(254)
+    .transform((value) => value.toLowerCase()),
+  password: z.string().min(6).max(256),
+});
 export const publicUserSchema = z.object({
   id: z.uuid(),
   email: z.string(),
@@ -58,3 +67,4 @@ export type PublicUser = z.infer<typeof publicUserSchema>;
 export type Me = z.infer<typeof meSchema>;
 export type Credential = z.infer<typeof credentialSchema>;
 export type PublicConfig = z.infer<typeof configSchema>;
+export type AdminPasswordLoginInput = z.infer<typeof adminPasswordLoginInput>;

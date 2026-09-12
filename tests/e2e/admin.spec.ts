@@ -134,3 +134,48 @@ test('M6 administrator can edit limits and tutorials; deletion needs explicit co
     .click();
   await expect(page.getByText('Data deletion completed', { exact: true })).toBeVisible();
 });
+
+test('administrator manages theme affiliate aliases and disables the public link', async ({
+  page,
+  context,
+}) => {
+  const f = await setup(context);
+  await context.addCookies([
+    {
+      name: 'runad-session',
+      value: f.root.credential.token,
+      url: 'http://127.0.0.1:3000',
+      httpOnly: true,
+      sameSite: 'Lax',
+    },
+  ]);
+  await page.goto('/admin?lang=zh-Hans');
+  const card = page.locator('.theme-links-card');
+  await card.locator('summary').click();
+  await card.getByRole('button', { name: '添加主题', exact: true }).click();
+  await card.getByLabel('主题名称', { exact: true }).fill('Shine PRO');
+  await card.getByLabel('匹配别名（每行一个）').fill('Shine PRO 1.3.0\nShine Professional');
+  await card.getByLabel('返利网址（HTTPS）').fill('https://themes.example/buy?ref=runad123');
+  await card.getByLabel('启用', { exact: true }).check();
+  await card.getByRole('button', { name: '保存主题链接', exact: true }).click();
+  await expect(card.getByRole('status')).toHaveText('主题链接已保存');
+  const entry = f.store.rows.settings.find((row) => row.key === 'theme_links')!.valueJson as Array<{
+    aliases: string[];
+    url: string;
+    enabled: boolean;
+  }>;
+  expect(entry[0]!.aliases).toEqual(['Shine PRO 1.3.0', 'Shine Professional']);
+  expect(entry[0]!.url).toBe('https://themes.example/buy?ref=runad123');
+  await page.setViewportSize({ width: 440, height: 850 });
+  await card.screenshot({ path: 'artifacts/theme-links-admin.png' });
+  await card.getByLabel('启用', { exact: true }).uncheck();
+  await card.getByRole('button', { name: '保存主题链接', exact: true }).click();
+  await expect
+    .poll(
+      () =>
+        (
+          f.store.rows.settings.find((row) => row.key === 'theme_links')!.valueJson as typeof entry
+        )[0]!.enabled,
+    )
+    .toBe(false);
+});

@@ -78,6 +78,7 @@ M2 错误：PRODUCT_INCOMPLETE、CURRENCY_UNVERIFIED/CURRENCY_CHANGED、SOURCE_C
 | POST /sessions/renew | 有效匿名/插件会话 | 延长现有 token 的 expiresAt，返回 {expiresAt}，不返回新 token；重复调用安全，限速且检查安装/账号状态 |
 | POST /auth/email/start | public＋限速 | { email, clientKind, deliveryLocale:UiLocale }；插件须携带安装 token → challengeId、retryAfterSeconds；响应不区分注册与登录；邮件按冻结的 deliveryLocale 模板发送 |
 | POST /auth/email/verify | challenge＋限速 | { challengeId, code, linkInstallationHistory } → 插件 {token,installationId,expiresAt,user} 或网站 {user,expiresAt}＋HttpOnly cookie；插件必须再次证明原安装会话，网页先 GET /auth/csrf；start/verify 均带 X-CSRF-Token 和 Origin，并使用绑定 challenge 的短期 HttpOnly pre-auth cookie；只有验证码/challengeId 不足以关联别人的安装 |
+| POST /auth/admin/login | web public＋CSRF＋限速 | {login,password} → {user,expiresAt}＋HttpOnly web cookie；只接受 admin_credentials 中的内部管理员账号，密码用 scrypt salt/hash 校验；错误统一 ADMIN_LOGIN_FAILED，不依赖 SMTP，不给插件 Bearer 使用 |
 | POST /auth/logout | session | 撤销当前会话；网站清除 cookie 并返回 {credential:null}；插件返回 {credential:{token,installationId,expiresAt}}。已关联安装建立新匿名上下文；未关联安装在同一安装签发新匿名令牌（旧匿名会话若仍有效，不因未关联登录而撤销） |
 | GET /me | session | {user:{id,email,role}或null,installationId或null,expiresAt,loginRequired,quota}；M1 quota=null，不能显示为无限或零 |
 | POST /captures | extension 核心 | { product:SourceProduct, draftContext:{targetCountry,language} }＋Idempotency-Key → {captureId,preparedRevision}（HTTP 201）；preparedRevision 为首个 PreparedDraftRevision；事务内写快照、capture、draft、revision、事件 |
@@ -100,7 +101,11 @@ M2 错误：PRODUCT_INCOMPLETE、CURRENCY_UNVERIFIED/CURRENCY_CHANGED、SOURCE_C
 | POST /me/delete-data | session | 严格输入 {confirm:true}，202 → {id,state}；按已验证主体创建分批删除请求，相同主体 pending 请求复用；保留账号 |
 | GET /me/data-deletion | session | [] 或最近一次 [{id,state:pending/complete}]，不返回他人的请求或内部游标 |
 
-M1 传输细节：网站生产 cookie 名为 __Host-runad-session / __Host-runad-preauth，Secure、HttpOnly、SameSite=Lax、Path=/；本地开发使用非 __Host 名称且允许 HTTP。网站写请求校验精确 WEB_ORIGIN 与绑定 cookie 的 CSRF；旧会话过期不妨碍重新申请邮箱登录。插件使用构建时精确 API origin、credentials=omit、禁止重定向，后台只接受本插件 sidepanel.html 发出的固定动作，不接受 URL/令牌参数。服务器只为 CHROME_EXTENSION_IDS 中的来源返回 CORS，不接收网页提交的安装 ID。安装令牌只返回一次，无法凭安装 ID 恢复。
+本机运维预览：start-frontend.bat 只在服务就绪后打开 /admin/login，不再调用本地免登录桥或签发临时管理员会话。管理员用 admin:bootstrap 写入的 ADMIN_EMAIL/ADMIN_PASSWORD 登录，仍走标准 web cookie、CSRF、管理员 API 校验和审计。LOCAL_PREVIEW_ENABLED=true 仅保留本地调试保护：禁用 BAT 管理进程中的 DeepSeek 密钥，并在严格回环条件下接受 Chrome 自动分配的开发扩展 ID。
+
+插件首次使用交互：产品首页不显示账号表单、不自动创建安装身份；采集按钮仅做本地预览。创建草稿按钮旁显示上传、文本检查及采集/导出统计用途，用户点击该按钮后，无有效会话时调用安装接口（同意当前 consentVersion），再提交采集。安装接口和采集接口的认证、同意字段及登录开关不变；强制登录时显示账号入口，账号表单位于独立视图。切换教程/账号视图保持当前商品和未保存编辑。
+
+M1 传输细节：网站生产 cookie 名为 __Host-runad-session / __Host-runad-preauth，Secure、HttpOnly、SameSite=Lax、Path=/；本地开发使用非 __Host 名称且允许 HTTP。网站写请求校验精确 WEB_ORIGIN 与绑定 cookie 的 CSRF；旧会话过期不妨碍重新申请邮箱登录。插件使用构建时精确 API origin、credentials=omit、禁止重定向，后台只接受本插件 sidepanel.html 发出的固定动作，不接受 URL/令牌参数。正式环境服务器只为 CHROME_EXTENSION_IDS 中的来源返回 CORS；本地 LOCAL_PREVIEW_ENABLED=true、非 production、WEB_ORIGIN 为 http://127.0.0.1:3000、请求地址为该回环地址或 Next.js 内部 localhost:3000，且存在 Host 时必须为 127.0.0.1:3000 时，额外接受合法的 chrome-extension://<32位a-p字符> 来源，无需固定开发 ID；会话/权限校验不变。服务器，不接收网页提交的安装 ID。安装令牌只返回一次，无法凭安装 ID 恢复。
 
 M1 限速为服务端固定初值：安装 IP 每小时 20；邮件发送 IP 每小时 30、邮箱每小时 5、安装每小时 10，邮箱两次发送严格间隔 60 秒；验证 IP 每 10 分钟 60、challenge 每 10 分钟 10、邮箱每 10 分钟 30、安装每 10 分钟 60；challenge 另限制 5 次错误。续期每 token 每分钟 10。所有桶在 MySQL 事务中原子更新。没有配置可信代理 IP 头时使用保守公共桶，不信任任意 X-Forwarded-For；部署时由可信代理覆盖配置的头并禁止直连应用端口。
 
@@ -256,3 +261,16 @@ Blob 属于 offscreen 文档，service worker 保存 permitId/downloadId/主体/
 许可过期返回 EXPORT_PERMIT_EXPIRED，即使重用原幂等 key；映射版本不一致返回 CLIENT_UPGRADE_REQUIRED。下载上报仅允许许可原 installation 及原登录/匿名主体，不因后来关联账号重写历史。重复 permit/type 或同 clientEventId 幂等；完成与失败互斥，乱序终态可被记录，不能从失败改为完成。downloadErrorCode 仅接收规范化 Chrome 代码，当前不持久保存详细错误文本。
 
 后台先落地许可/会话摘要/Blob URL，再调用 downloads；状态映射按 downloadId 或原 Blob URL 恢复。未找到记录显示 unconfirmed，不自动重下。事件保留 24 小时重报资格、本地状态最多两天；不保存额外原始令牌。首次点击立即发送后台消息，关闭侧栏不依赖其后续异步操作。
+
+
+
+
+
+
+## 主题返利接口
+
+- `GET /api/v1/theme-link?name=<主题名>`：匿名公开只读接口，name 去首尾空格后 1–250 字符；返回 `{link:null}` 或 `{link:{name,url}}`。CORS 沿用插件来源策略，网站概览无安装令牌也可查询；不返回禁用配置、管理 ID 或全部别名。`Cache-Control: no-store`，无外部服务调用和自动跳转。
+- `GET /api/v1/admin/theme-links`：管理员 web 会话，返回 `{expectedVersion,items}`。
+- `PATCH /api/v1/admin/theme-links`：管理员 web 会话及 CSRF，提交完整配置 `{expectedVersion,items}`；返回保存后的配置。每条 `{id:uuid,name,aliases:string[],url,enabled}`，最多 100 条，每条最多 20 个别名，名称/别名 1–250 字符。URL 最多 2048 字符，仅 HTTPS，无账户密码、非默认端口和 fragment，保留查询参数。重名/别名冲突、重复 ID 拒绝为 INVALID_INPUT；版本冲突返回 REVISION_CONFLICT 409；保存生成审计记录。
+- 匹配：名称/别名 NFKC、去首尾空格、连续空白合并、转小写后精确相等。不模糊匹配或自动推断定制主题；不同主题不能配置同一匹配名称。
+- 插件用独立三秒查询，失败不阻塞概览、不改变网站缓存时间。仅当前匹配结果可变为 HTTPS 外链，附推广标识及 rel=sponsored noopener noreferrer；语言切换不重查主题。

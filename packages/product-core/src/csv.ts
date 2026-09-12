@@ -25,7 +25,19 @@ export const csvHeaders = [
   'Image alt text',
   'Variant image URL',
 ] as const;
-export function productCsv(raw: PreparedRevision) {
+
+const optionalHeaders = [
+  'Barcodes',
+  'Weight value (grams)',
+  'Requires shipping',
+  'Charge tax',
+] as const;
+
+type CsvRow = Record<string, string>;
+
+type CsvPayload = { headers: string[]; rows: CsvRow[] };
+
+function payload(raw: PreparedRevision): CsvPayload {
   const revision = preparedRevisionSchema.parse(raw),
     p = revision.preparedProduct,
     s = revision.exportSettings;
@@ -39,9 +51,9 @@ export function productCsv(raw: PreparedRevision) {
   if (p.variants.every((v) => v.requiresShipping !== undefined)) headers.push('Requires shipping');
   if (p.variants.every((v) => v.taxable !== undefined)) headers.push('Charge tax');
   const images = [...p.images].sort((a, b) => a.position - b.position);
-  const rows: Record<string, string>[] = [];
+  const rows: CsvRow[] = [];
   for (let index = 0; index < Math.max(p.variants.length, images.length); index++) {
-    const row: Record<string, string> = {
+    const row: CsvRow = {
       'URL handle': s.handle,
       Status: 'draft',
       'Published on online store': 'false',
@@ -86,6 +98,10 @@ export function productCsv(raw: PreparedRevision) {
       });
     rows.push(row);
   }
+  return { headers, rows };
+}
+
+function render(headers: string[], rows: CsvRow[]) {
   return (
     '\uFEFF' +
     [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ''))]
@@ -94,6 +110,25 @@ export function productCsv(raw: PreparedRevision) {
     '\r\n'
   );
 }
+
+export function productCsv(raw: PreparedRevision) {
+  const data = payload(raw);
+  return render(data.headers, data.rows);
+}
+
+export function productsCsv(raw: PreparedRevision[]) {
+  if (!raw.length) throw new Error('PRODUCT_INCOMPLETE');
+  const payloads = raw.map(payload);
+  const headers = [
+    ...csvHeaders,
+    ...optionalHeaders.filter((h) => payloads.some((p) => p.headers.includes(h))),
+  ];
+  return render(
+    headers,
+    payloads.flatMap((p) => p.rows),
+  );
+}
+
 export async function verifyExportHash(revision: PreparedRevision) {
   const bytes = new TextEncoder().encode(
     stableJson({

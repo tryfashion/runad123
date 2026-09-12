@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ContentCard } from './content-card';
 import { adminText } from '@runad123/contracts/admin-i18n';
 import { AccountCard } from './account-card';
+import { AdminSystem } from './admin-system';
 import { authText } from '@runad123/contracts/auth-i18n';
 import {
   parsePreference,
@@ -56,6 +57,8 @@ export function Workspace({
     setLocale(resolveWebsiteLocale(next, undefined, navigator.languages));
   }
 
+  if (view === 'admin') return <AdminSystem locale={locale} onLocaleChange={choose} />;
+
   return (
     <div className="shell">
       <header>
@@ -85,7 +88,7 @@ export function Workspace({
             <p className="eyebrow">{t('stage')}</p>
             <h1>
               {view
-                ? view === 'account' || view === 'admin'
+                ? view === 'account'
                   ? authText(locale, view)
                   : adminText(locale, view)
                 : t('workspace')}
@@ -97,8 +100,8 @@ export function Workspace({
           </span>
         </div>
         {view ? (
-          view === 'account' || view === 'admin' ? (
-            <AccountCard locale={locale} admin={view === 'admin'} />
+          view === 'account' ? (
+            <AccountCard locale={locale} />
           ) : (
             <ContentCard locale={locale} view={view} />
           )

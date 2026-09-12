@@ -45,6 +45,7 @@ export function runtimeHandler(request: Request): Promise<Response> {
         {
           webOrigin: env.WEB_ORIGIN,
           extensionIds: ids,
+          localPreview: env.LOCAL_PREVIEW_ENABLED === 'true',
           production: env.NODE_ENV === 'production',
           trustedIpHeader: env.TRUSTED_CLIENT_IP_HEADER,
         },

@@ -25,6 +25,7 @@
 | settings | key、value_json、version、updated_by | UNIQUE(key)；后台只能更新服务端白名单及已验证类型 |
 | tutorials | id、title、summary、url、content_locale、category、placement、sort_order、enabled | INDEX(enabled,placement,content_locale,sort_order)；HTTPS＋允许域名校验；每行一篇原语言文章 |
 | admin_audit_logs | id、admin_user_id、action、target_type、target_id、before_json、after_json、request_id | INDEX(admin_user_id,created_at)；排除密钥、验证码和令牌 |
+| admin_credentials | user_id、login_normalized、password_salt、password_hash、password_version | PK(user_id)；UNIQUE(login_normalized)；仅内部管理员密码登录使用，保存 scrypt salt/hash，不保存明文 |
 
 匿名会话有效期初始 90 天，登录插件会话 30 天，网站会话 7 天；过期重新认证。匿名/插件续期只凭仍有效的会话延长现有 token 有效期，不更换 token，不可凭 installation ID 领回旧身份。同意关联历史时撤销该安装的匿名会话；退出撤销当前登录会话，已关联安装建立新的匿名上下文，未关联安装才可恢复仍有效的原匿名凭据，不把用户数据暴露给匿名态。禁用/撤销优先于续期，且不能使过期会话复活。
 
@@ -124,7 +125,7 @@ job_attempts 是费用审计的权威明细，日志不是账本。外呼响应�
 | data_deletions | id、principal_type、principal_id、state、phase、progress_cursor nullable、created_at、updated_at | PK(id)；INDEX(state,created_at)；principal 为受验证 user/installation，多态引用由服务层控制；在统一短事务内复用已有 pending 请求 |
 | product_daily_stats | id、day_utc、product_id、capture_count、export_count、anonymous_capture_actors、account_capture_actors、anonymous_export_actors、account_export_actors、created_at、updated_at | UNIQUE(day_utc,product_id)；product_id RESTRICT FK；不保存 actor_key/用户明细，不能相加推算多日 distinct |
 
-settings.admin_limits 保存 `{allowedTutorialHosts:[]}` 与乐观锁版本；settings.retention 初始 `{payloadDays:30,eventDays:90,aggregateDays:365,auditDays:180}`。清理读取此策略，首版允许运维缩短、拒绝超过已声明上限；后台没有调整保留期入口。0006 不修改已有业务数据、不启用 AI。本地主库已至 0006，共 23 张业务表＋runad_migrations。
+settings.admin_limits 保存 `{allowedTutorialHosts:[]}` 与乐观锁版本；settings.retention 初始 `{payloadDays:30,eventDays:90,aggregateDays:365,auditDays:180}`。清理读取此策略，首版允许运维缩短、拒绝超过已声明上限；后台没有调整保留期入口。0006 不修改已有业务数据、不启用 AI。本地主库此前已至 0007；0008_admin_credentials 新增 admin_credentials，应用后为 24 张业务表＋runad_migrations。
 
 ## 6. 保留和清理
 
@@ -151,3 +152,10 @@ M6 worker 每 30 秒触发维护周期，每次一个个人删除批次、一个
 个人删除顺序：取消任务并结算预留 → 事件 → 许可 → requests → attempts → jobs → revisions → drafts → captures → 可重算窗口 daily_stats → 解除本人历史关联。快照在没有其他 capture 引用时才清除并置空 latest_snapshot_id；发生时 user_id 非空的其他账号记录不会因共享安装而被删除。过去 90 天内聚合重算，90 天外的匿名聚合不因缺少原始事件而伪造重算。
 
 到期任务先处理 24 小时执行期限，再清理正文和 90 天依赖；任务过期时仍不能把未确认的供应商费用写成 0。会话、挑战、限速桶分别遵守上表期限；源商品/店铺依据 last_seen_at，仍被 daily_stats 等引用时保留无用户正文的商品元数据。运行间隔和批次意味着到期删除由 worker 逐批完成，积压时须在后台观察维护心跳和任务状态；大规模负载/运维备份验证属于 M7。
+
+## 主题返利配置（0007）
+
+现有 settings 新增 `theme_links` key：value_json 为主题链接数组（id、name、aliases、url、enabled，字段约束以 CONTRACTS 为准），version 乐观版本、updated_by 管理员、created_at/updated_at 沿用现有字段。迁移 0007_theme_links.sql 只补空数组/version=1，不覆盖已有配置。无新表，仍为 23 张业务表＋runad_migrations。
+
+管理员整体保存主题配置，沿用 AuthStore 的事务锁，验证 expectedVersion 后递增版本，同时写 admin_audit_logs，action=`theme_links.save`、target_type=`settings`、target_id=`theme_links`，保存前后配置。无配置时公开查找返回 null；后台首次保存也可受控创建配置。配置仅保存公开返利链接，不保存合作平台密码/API 密钥。删除单条通过版本化完整数组保存实现。
+

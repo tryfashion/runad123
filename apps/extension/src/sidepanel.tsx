@@ -1,3 +1,5 @@
+import { WebsitePanel } from './website-panel';
+import { overviewText } from './website-overview';
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
@@ -8,6 +10,7 @@ import {
   type UiPreference,
 } from '@runad123/contracts/i18n';
 import './styles.css';
+import { panelText } from './panel-i18n';
 import { ExtensionAccount } from './account';
 import { TutorialPanel } from './tutorial-panel';
 import { ProductPanel } from './product-panel';
@@ -22,6 +25,10 @@ function Panel({ initialPreference }: { initialPreference: UiPreference }) {
     resolveLocale(initialPreference, [browserLocale()]),
   );
   const [saveError, setSaveError] = useState(false);
+  const [view, setView] = useState<'product' | 'overview' | 'tutorials' | 'tools' | 'account'>(
+    'product',
+  );
+  const ui = (key: Parameters<typeof panelText>[1]) => panelText(locale, key);
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -51,45 +58,91 @@ function Panel({ initialPreference }: { initialPreference: UiPreference }) {
 
   return (
     <div className="panel">
-      <header>
-        <strong>
-          runad<span>123</span>
-          <b aria-hidden="true">↗</b>
-        </strong>
-        <label>
-          <span aria-hidden="true">◎</span>
-          <select
-            aria-label={t('language')}
-            value={preference}
-            onChange={(event) => void choose(event.target.value)}
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-icon" aria-hidden="true">
+            r
+          </span>
+          <div>
+            <strong>runad123</strong>
+            <span className="brand-subtitle">{ui('subtitle')}</span>
+          </div>
+        </div>
+        <div className="header-actions">
+          <label className="language-picker">
+            <span aria-hidden="true">◎</span>
+            <select
+              aria-label={t('language')}
+              value={preference}
+              onChange={(event) => void choose(event.target.value)}
+            >
+              <option value="auto">{t('auto')}</option>
+              <option value="zh-Hans">简体中文</option>
+              <option value="zh-Hant">繁體中文</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <a
+            className="account-link"
+            href="#account"
+            onClick={(event) => {
+              event.preventDefault();
+              setView('account');
+            }}
           >
-            <option value="auto">{t('auto')}</option>
-            <option value="zh-Hans">简体中文</option>
-            <option value="zh-Hant">繁體中文</option>
-            <option value="en">English</option>
-          </select>
-        </label>
+            {ui('login')}
+          </a>
+        </div>
       </header>
+      <nav className="panel-tabs" aria-label={ui('help')}>
+        <button aria-pressed={view === 'product'} onClick={() => setView('product')}>
+          {ui('products')}
+        </button>
+        <button aria-pressed={view === 'overview'} onClick={() => setView('overview')}>
+          {overviewText(locale, 'tab')}
+        </button>
+        <button aria-pressed={view === 'tutorials'} onClick={() => setView('tutorials')}>
+          {ui('tutorials')}
+        </button>
+        <button aria-pressed={view === 'tools'} onClick={() => setView('tools')}>
+          {ui('tools')}
+        </button>
+      </nav>
       <main>
-        <div className="intro">
-          <span className="badge">{t('stage')}</span>
-          <h1>{t('workspace')}</h1>
+        <div hidden={view !== 'product'}>
+          <div className="section-heading">
+            <h1>{ui('current')}</h1>
+            <span>{ui('flow')}</span>
+          </div>
+          <ProductPanel locale={locale} onAccount={() => setView('account')} />
+          <button className="guide-link" onClick={() => setView('tutorials')}>
+            <span className="guide-icon" aria-hidden="true">
+              ↗
+            </span>
+            <span>
+              <b>{ui('guide')}</b>
+              <small>{ui('guideHint')}</small>
+            </span>
+            <span aria-hidden="true">→</span>
+          </button>
         </div>
-        <ExtensionAccount locale={locale} />
-        <ProductPanel locale={locale} />
-        <TutorialPanel locale={locale} />
-        <div className="steps">
-          {(['collect', 'review', 'export'] as const).map((key, index) => (
-            <div key={key}>
-              <span>0{index + 1}</span>
-              <p>{t(key)}</p>
-            </div>
-          ))}
-        </div>
-        <p className="scope">{t('scope')}</p>
+        {view === 'overview' && <WebsitePanel locale={locale} />}
+        {view === 'tutorials' && <TutorialPanel locale={locale} />}
+        {view === 'tools' && <section className="tools-panel" aria-label={ui('tools')} />}
+        {view === 'account' && (
+          <>
+            <button className="back-link" onClick={() => setView('product')}>
+              ← {ui('back')}
+            </button>
+            <ExtensionAccount locale={locale} />
+          </>
+        )}
         {saveError && <p role="alert">{t('persistenceError')}</p>}
       </main>
-      <footer>{t('privacy')}</footer>
+      <footer>
+        <span>runad123</span>
+        <span>{ui('subtitle')}</span>
+      </footer>
     </div>
   );
 }

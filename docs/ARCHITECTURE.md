@@ -251,3 +251,7 @@ M6 路由为 `/tutorials`、`/guide`、`/privacy`、`/account` 和 `/admin`；�
 - [DeepSeek JSON mode](https://api-docs.deepseek.com/guides/json_mode/)：结构化输出仍须处理空结果并校验。
 
 以上是设计依据，不代表已经验证当前服务器、全部 Shopify 主题或真实 AI 结果。
+
+## 网站概览中的推广链接
+
+主题识别值在插件内按网站每日缓存；插件将主题名发送本服务查询运营配置。MySQL settings.theme_links 为唯一配置源，管理 UI 和 API 在现有 Next.js 服务内。查询与网站读取分离，无新增微服务、外部爬取或佣金平台集成；只展示管理员配置的已启用链接，匹配不确定时保持普通主题文字。

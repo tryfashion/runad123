@@ -6,8 +6,11 @@ import {
   tutorialQuerySchema,
   limitsInputSchema,
   trendQuerySchema,
+  adminUserStatusInputSchema,
+  adminAccountInputSchema,
+  adminPasswordResetInputSchema,
 } from '@runad123/contracts/admin';
-import { AuthService } from './auth.js';
+import { AuthService, hashAdminPassword } from './auth.js';
 import { RiskService } from './risk-service.js';
 import { aiConfigSchema, disabledAiConfig } from './deepseek.js';
 import { digest, ServiceError } from './security.js';
@@ -411,6 +414,187 @@ export class AdminService {
       return { items, nextCursor: rows.length > 20 ? rows[19]!.id : null };
     });
   }
+
+  async adminAccounts(token?: string) {
+    return this.auth.store.transaction(async (tx) => {
+      await this.auth.authorize(tx, token, 'admin');
+      const credentials = await tx.scan('adminCredentials', { limit: 100 });
+      const items = [];
+      for (const credential of credentials) {
+        const user = (await tx.find('users', { id: credential.userId }))[0];
+        if (!user) continue;
+        items.push({
+          id: user.id,
+          login: credential.loginNormalized,
+          email: user.emailDisplay,
+          role: user.role,
+          status: user.status,
+          lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+          createdAt: user.createdAt.toISOString(),
+          updatedAt: credential.updatedAt.toISOString(),
+        });
+      }
+      return { items };
+    });
+  }
+  permissions(token?: string) {
+    const modules = [
+      ['overview', 'read'],
+      ['products', 'read'],
+      ['users', 'manage'],
+      ['admins', 'manage'],
+      ['roles', 'read'],
+      ['themes', 'manage'],
+      ['tutorials', 'reserved'],
+      ['ai', 'read'],
+      ['settings', 'manage'],
+      ['audits', 'read'],
+    ].map(([module, level]) => ({ module, level }));
+    return this.auth.store.transaction(async (tx) => {
+      await this.auth.authorize(tx, token, 'admin');
+      return {
+        roles: [
+          {
+            key: 'admin',
+            name: 'Administrator',
+            builtIn: true,
+            description:
+              'Built-in administrator role. Granular RBAC tables are reserved for the next iteration.',
+            modules,
+          },
+        ],
+      };
+    });
+  }
+  async createAdmin(raw: unknown, token: string | undefined, requestId: string) {
+    const input = adminAccountInputSchema.parse(raw);
+    return this.auth.store.transaction(async (tx) => {
+      const actor = await this.auth.authorize(tx, token, 'admin');
+      const priorLogin = (await tx.find('adminCredentials', { loginNormalized: input.login }))[0],
+        priorEmail = (await tx.find('users', { emailNormalized: input.email }))[0];
+      if (priorLogin || priorEmail) throw new ServiceError('ADMIN_ACCOUNT_EXISTS', 409);
+      const now = this.auth.now(),
+        user: Rows['users'] = {
+          id: randomUUID(),
+          emailNormalized: input.email,
+          emailDisplay: input.email,
+          role: 'admin',
+          status: 'active',
+          lastLoginAt: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+        credential = await hashAdminPassword(input.password);
+      await tx.insert('users', user);
+      await tx.insert('adminCredentials', {
+        userId: user.id,
+        loginNormalized: input.login,
+        passwordSalt: credential.salt,
+        passwordHash: credential.hash,
+        passwordVersion: credential.version,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await this.audit(
+        tx,
+        actor.user!.id,
+        'admin_account.create',
+        'users',
+        user.id,
+        null,
+        { login: input.login, email: input.email },
+        requestId,
+      );
+      return {
+        id: user.id,
+        login: input.login,
+        email: user.emailDisplay,
+        role: user.role,
+        status: user.status,
+        lastLoginAt: null,
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: now.toISOString(),
+      };
+    });
+  }
+  async resetAdminPassword(
+    userId: string,
+    raw: unknown,
+    token: string | undefined,
+    requestId: string,
+  ) {
+    z.uuid().parse(userId);
+    const input = adminPasswordResetInputSchema.parse(raw);
+    return this.auth.store.transaction(async (tx) => {
+      const actor = await this.auth.authorize(tx, token, 'admin'),
+        user = (await tx.find('users', { id: userId }))[0],
+        prior = (await tx.find('adminCredentials', { userId }))[0];
+      if (!user || user.role !== 'admin' || !prior) throw new ServiceError('NOT_FOUND', 404);
+      const now = this.auth.now(),
+        credential = await hashAdminPassword(input.password);
+      await tx.update(
+        'adminCredentials',
+        { userId },
+        {
+          passwordSalt: credential.salt,
+          passwordHash: credential.hash,
+          passwordVersion: credential.version,
+          updatedAt: now,
+        },
+      );
+      const sessions = await tx.find('sessions', { userId });
+      for (const session of sessions)
+        await tx.update('sessions', { id: session.id }, { revokedAt: now, updatedAt: now });
+      await this.audit(
+        tx,
+        actor.user!.id,
+        'admin_account.password_reset',
+        'users',
+        userId,
+        { passwordVersion: prior.passwordVersion },
+        { passwordVersion: credential.version },
+        requestId,
+      );
+      return { ok: true };
+    });
+  }
+  async changeUserStatus(
+    userId: string,
+    raw: unknown,
+    token: string | undefined,
+    requestId: string,
+  ) {
+    z.uuid().parse(userId);
+    const input = adminUserStatusInputSchema.parse(raw);
+    return this.auth.store.transaction(async (tx) => {
+      const actor = await this.auth.authorize(tx, token, 'admin'),
+        user = (await tx.find('users', { id: userId }))[0];
+      if (!user) throw new ServiceError('NOT_FOUND', 404);
+      if (actor.user!.id === userId && input.status === 'disabled')
+        throw new ServiceError('CANNOT_DISABLE_SELF', 409);
+      const now = this.auth.now();
+      if (user.status !== input.status) {
+        await tx.update('users', { id: userId }, { status: input.status, updatedAt: now });
+        if (input.status === 'disabled') {
+          const sessions = await tx.find('sessions', { userId });
+          for (const session of sessions)
+            await tx.update('sessions', { id: session.id }, { revokedAt: now, updatedAt: now });
+        }
+        await this.audit(
+          tx,
+          actor.user!.id,
+          'user.status_update',
+          'users',
+          userId,
+          { status: user.status },
+          { status: input.status },
+          requestId,
+        );
+      }
+      return { id: user.id, email: user.emailDisplay, role: user.role, status: input.status };
+    });
+  }
+
   async deleteData(token?: string) {
     return this.auth.store.transaction(async (tx) => {
       const actor = await this.auth.authorize(tx, token, 'read'),

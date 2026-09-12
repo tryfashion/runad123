@@ -1,4 +1,5 @@
 'use client';
+import { ThemeLinksCard } from './theme-links-card';
 import { useEffect, useState, useRef } from 'react';
 import {
   tutorialListSchema,
@@ -113,6 +114,7 @@ export function AdminCard({ locale }: { locale: UiLocale }) {
   return (
     <section className="admin-card account-card">
       <h2>{t('dashboard')}</h2>
+      {limits && <ThemeLinksCard locale={locale} />}
       <button disabled={busy} onClick={() => void run(refresh)}>
         {t('refresh')}
       </button>
