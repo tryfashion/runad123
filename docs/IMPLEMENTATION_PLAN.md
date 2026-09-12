@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-13 后台当前管理员账号修改入口调整：从系统设置页移到右上角用户头像按钮弹窗，当前密码放在表单最前面，系统设置页只保留系统配置与额度配置。已执行 lint、typecheck、@runad123/web build 通过；Web 构建仍有既有 Next Windows SWC 回退 WASM 警告。
+
 - 2026-09-13 后台新增当前管理员账号与密码修改：系统设置页新增当前管理员账号卡片，可在校验当前密码后修改登录名、邮箱和新密码；服务端新增 /admin/me/account 读取与修改接口，修改密码时撤销其它会话并写入审计。已执行 lint、typecheck、@runad123/web build 通过；Web 构建仍有既有 Next Windows SWC 回退 WASM 警告。
 
 - 2026-09-13 准备宝塔临时域名部署：新增 `.env.production.example`，固定示例 `WEB_ORIGIN=https://ads.zhouerp.com`、`NODE_ENV=production`、关闭本地预览；新增 `docs/BAOTA_DEPLOY.md`，记录宝塔建站、HTTPS、反向代理到 127.0.0.1:3000、迁移、管理员初始化、worker 启动和插件 `RUNAD_API_ORIGIN=https://ads.zhouerp.com` 发布构建步骤。不写入真实 MySQL、AUTH_SECRET、SMTP、DeepSeek 或插件 ID。
@@ -251,6 +253,7 @@
 - 先做可运行纵向流程，再补细节；以测试结果推进，避免一次生成所有模块后再集中修错。
 - 出现契约不一致时先修正最小规格冲突并记录；遇到鉴权、CSV 实际导入或并发计费问题时集中复核。
 - 模型推理档位不作为质量保障；关键验收和真实集成结果才决定阶段是否完成。
+
 
 
 
