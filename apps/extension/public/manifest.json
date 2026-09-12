@@ -5,10 +5,20 @@
   "version": "0.0.1",
   "minimum_chrome_version": "120",
   "default_locale": "en",
-  "permissions": ["storage", "activeTab", "scripting", "downloads", "offscreen", "alarms"],
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "activeTab",
+    "scripting",
+    "downloads",
+    "offscreen",
+    "alarms"
+  ],
   "action": {
-    "default_title": "runad123",
-    "default_popup": "popup.html"
+    "default_title": "runad123"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
   },
   "background": {
     "service_worker": "background.js",

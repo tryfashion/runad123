@@ -123,7 +123,7 @@ async function dispatch(raw: unknown) {
 }
 chrome.runtime.onMessage.addListener((message: unknown, sender, respond) => {
   // A content script, another extension or arbitrary URL cannot request authenticated operations.
-  if (sender.id !== chrome.runtime.id || sender.url !== chrome.runtime.getURL('popup.html'))
+  if (sender.id !== chrome.runtime.id || sender.url !== chrome.runtime.getURL('sidepanel.html'))
     return false;
   if (!messageSchema.safeParse(message).success) return false;
   queue = queue

@@ -46,7 +46,7 @@ try {
   const id = new URL(worker.url()).host;
   assert.match(id, /^[a-p]{32}$/);
   const panel = await context.newPage();
-  await panel.goto(`chrome-extension://${id}/popup.html`);
+  await panel.goto(`chrome-extension://${id}/sidepanel.html`);
   await panel.getByRole('combobox').selectOption('zh-Hans');
   assert.equal(await panel.locator('.account').count(), 0);
   await panel.getByRole('link', { name: '账号 / 登录' }).click();

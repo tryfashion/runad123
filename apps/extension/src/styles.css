@@ -10,11 +10,7 @@
 }
 body {
   margin: 0;
-  width: 390px;
-  min-width: 360px;
-  max-width: 420px;
-  max-height: 620px;
-  overflow: auto;
+  min-width: 280px;
 }
 [hidden] {
   display: none !important;

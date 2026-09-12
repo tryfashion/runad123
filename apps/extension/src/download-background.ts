@@ -238,7 +238,7 @@ async function dispatch(raw: unknown) {
 chrome.runtime.onMessage.addListener((m, sender, respond) => {
   if (
     sender.id !== chrome.runtime.id ||
-    sender.url !== chrome.runtime.getURL('popup.html') ||
+    sender.url !== chrome.runtime.getURL('sidepanel.html') ||
     !['exportStart', 'downloadStatus'].includes(m?.action)
   )
     return false;
