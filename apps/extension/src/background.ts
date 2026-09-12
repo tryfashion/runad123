@@ -2,100 +2,107 @@ import './download-background';
 import './product-background';
 import './auth-background';
 
-function toggleInjectedDrawer() {
+function setStyles(element: HTMLElement, styles: Record<string, string>) {
+  for (const [key, value] of Object.entries(styles)) element.style.setProperty(key, value);
+}
+
+function toggleInjectedDrawer(frameUrl: string) {
   const existing = document.getElementById('runad123-extension-drawer-root');
   if (existing) {
     existing.remove();
-    document.documentElement.style.removeProperty('overflow');
     return;
   }
 
   const root = document.createElement('div');
   root.id = 'runad123-extension-drawer-root';
-  const shadow = root.attachShadow({ mode: 'closed' });
-  const style = document.createElement('style');
-  style.textContent = `
-    :host { all: initial; }
-    .backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 2147483646;
-      background: rgba(15, 23, 42, 0.38);
-    }
-    .drawer {
-      position: fixed;
-      top: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 2147483647;
-      width: min(470px, 42vw);
-      min-width: 420px;
-      max-width: calc(100vw - 72px);
-      background: #f4f6f9;
-      box-shadow: -16px 0 36px rgba(15, 23, 42, 0.22);
-      display: flex;
-      flex-direction: column;
-      animation: runad123-slide-in 160ms ease-out;
-    }
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      background: #f4f6f9;
-    }
-    .close {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 1;
-      width: 30px;
-      height: 30px;
-      border: 1px solid #d7dfeb;
-      border-radius: 8px;
-      background: #ffffff;
-      color: #526179;
-      font: 20px/1 Arial, sans-serif;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-    }
-    @keyframes runad123-slide-in {
-      from { transform: translateX(24px); opacity: 0.72; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-    @media (max-width: 760px) {
-      .drawer {
-        width: min(440px, 92vw);
-        min-width: 0;
-        max-width: 92vw;
-      }
-    }
-  `;
+  setStyles(root, {
+    position: 'fixed',
+    inset: '0',
+    'z-index': '2147483647',
+    'font-family': "Inter, 'Segoe UI', 'Microsoft YaHei', sans-serif",
+  });
+
   const backdrop = document.createElement('button');
   backdrop.type = 'button';
-  backdrop.className = 'backdrop';
   backdrop.setAttribute('aria-label', 'Close runad123');
+  setStyles(backdrop, {
+    position: 'absolute',
+    inset: '0',
+    border: '0',
+    margin: '0',
+    padding: '0',
+    cursor: 'default',
+    background: 'rgba(15, 23, 42, 0.38)',
+  });
+
   const drawer = document.createElement('aside');
-  drawer.className = 'drawer';
   drawer.setAttribute('role', 'dialog');
   drawer.setAttribute('aria-label', 'runad123');
+  setStyles(drawer, {
+    position: 'absolute',
+    top: '0',
+    right: '0',
+    bottom: '0',
+    width: 'min(470px, 42vw)',
+    'min-width': '420px',
+    'max-width': 'calc(100vw - 72px)',
+    background: '#f4f6f9',
+    'box-shadow': '-16px 0 36px rgba(15, 23, 42, 0.22)',
+    display: 'flex',
+    'flex-direction': 'column',
+    transform: 'translateX(0)',
+  });
+
+  const loading = document.createElement('div');
+  loading.textContent = 'runad123';
+  setStyles(loading, {
+    position: 'absolute',
+    inset: '0',
+    display: 'grid',
+    'place-items': 'center',
+    color: '#526179',
+    background: '#f4f6f9',
+    'font-size': '14px',
+  });
+
   const close = document.createElement('button');
   close.type = 'button';
-  close.className = 'close';
   close.textContent = '×';
   close.setAttribute('aria-label', 'Close runad123');
+  setStyles(close, {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    'z-index': '2',
+    width: '30px',
+    height: '30px',
+    border: '1px solid #d7dfeb',
+    'border-radius': '8px',
+    background: '#ffffff',
+    color: '#526179',
+    font: '20px/1 Arial, sans-serif',
+    cursor: 'pointer',
+    'box-shadow': '0 2px 8px rgba(15, 23, 42, 0.08)',
+  });
+
   const frame = document.createElement('iframe');
-  frame.src = chrome.runtime.getURL('sidepanel.html');
+  frame.src = frameUrl;
   frame.allow = 'clipboard-read; clipboard-write';
-  const remove = () => {
-    root.remove();
-    document.documentElement.style.removeProperty('overflow');
-  };
+  setStyles(frame, {
+    position: 'relative',
+    'z-index': '1',
+    width: '100%',
+    height: '100%',
+    border: '0',
+    background: '#f4f6f9',
+  });
+
+  const remove = () => root.remove();
   backdrop.addEventListener('click', remove);
   close.addEventListener('click', remove);
-  drawer.append(close, frame);
-  shadow.append(style, backdrop, drawer);
+  drawer.append(loading, frame, close);
+  root.append(backdrop, drawer);
   document.documentElement.append(root);
-  document.documentElement.style.overflow = 'hidden';
 }
 
 async function initialize() {
@@ -107,6 +114,7 @@ chrome.action.onClicked.addListener((tab) => {
   void chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: toggleInjectedDrawer,
+    args: [chrome.runtime.getURL('sidepanel.html')],
   });
 });
 
