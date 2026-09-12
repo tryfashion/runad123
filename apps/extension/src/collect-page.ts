@@ -134,15 +134,15 @@ export async function collectCollectionPage(): Promise<CollectionResult> {
     const initial = location.href,
       url = new URL(initial),
       match = /^(\/[^/]+)?\/collections\/([^/?#]+)\/?$/.exec(url.pathname);
-    if (!match?.[2]) return { error: 'UNSUPPORTED_COLLECTION' };
     if (!isShopifyPage()) return { error: 'UNSUPPORTED_COLLECTION' };
-    const root = url.origin + (match[1] ?? '') + '/';
+    const root = url.origin + (match?.[1] ?? '') + '/';
     const before = await readCurrency(root, controller.signal);
-    const collectionEndpoint =
-      root +
-      'collections/' +
-      encodeURIComponent(decodeURIComponent(match[2])) +
-      '/products.json?limit=50';
+    const collectionEndpoint = match?.[2]
+      ? root +
+        'collections/' +
+        encodeURIComponent(decodeURIComponent(match[2])) +
+        '/products.json?limit=50'
+      : root + 'products.json?limit=50';
     const listing = JSON.parse(await readText(collectionEndpoint, controller.signal)) as {
       products?: Array<{ handle?: unknown }>;
     };
@@ -176,11 +176,12 @@ export async function collectCollectionPage(): Promise<CollectionResult> {
     if (!products.length) return { error: 'SOURCE_UNAVAILABLE' };
     return {
       products: products.map((p) => ({ ...p, currency: before })),
-      collectionUrl:
-        url.origin +
-        (match[1] ?? '') +
-        '/collections/' +
-        encodeURIComponent(decodeURIComponent(match[2])),
+      collectionUrl: match?.[2]
+        ? url.origin +
+          (match[1] ?? '') +
+          '/collections/' +
+          encodeURIComponent(decodeURIComponent(match[2]))
+        : root,
       count: products.length,
       failed,
     };

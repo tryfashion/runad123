@@ -46,7 +46,9 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
     [edits, setEdits] = useState<Edits | null>(null);
   const [risk, setRisk] = useState<RiskStatus | null>(null);
   const [autoRisk, setAutoRisk] = useState(false);
-  const [isNonShopify, setIsNonShopify] = useState(false);
+  const [pageState, setPageState] = useState<
+    'unknown' | 'non-shopify' | 'shopify-home' | 'collection' | 'product'
+  >('unknown');
   const [sourcingSites, setSourcingSites] = useState<SourcingSite[]>([]);
   const [target, setTarget] = useState(''),
     [language, setLanguage] = useState<PreparedRevision['language']>('preserve'),
@@ -91,13 +93,31 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
       .then(async ([tab]) => {
         if (tab?.id === undefined || !tab.url || !/^https?:/.test(tab.url)) return;
         try {
+          const url = new URL(tab.url);
+          const productPage = /\/products\/[^/]+/.test(url.pathname);
+          const collectionPage = /\/collections(?:\/[^/?#]+)?\/?$/.test(url.pathname);
           const [result] = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             func: readWebsite,
           });
-          setIsNonShopify(result?.result?.shopify === false);
+          setPageState(
+            result?.result?.shopify === false
+              ? 'non-shopify'
+              : productPage
+                ? 'product'
+                : collectionPage
+                  ? 'collection'
+                  : 'shopify-home',
+          );
         } catch {
-          setIsNonShopify(!/\/products\/[^/]+/.test(new URL(tab.url).pathname));
+          const path = new URL(tab.url).pathname;
+          setPageState(
+            /\/products\/[^/]+/.test(path)
+              ? 'product'
+              : /\/collections(?:\/[^/?#]+)?\/?$/.test(path)
+                ? 'collection'
+                : 'unknown',
+          );
         }
       })
       .catch(() => undefined);
@@ -279,6 +299,29 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
       : message in authDictionaries[locale]
         ? authText(locale, message)
         : t(message);
+  const emptyTitle =
+    pageState === 'non-shopify'
+      ? ui('nonShopifyTitle')
+      : pageState === 'shopify-home' || pageState === 'collection'
+        ? ui('shopifyStoreTitle')
+        : ui('ready');
+  const emptyHint =
+    pageState === 'non-shopify'
+      ? ui('sourcingPrompt')
+      : pageState === 'collection'
+        ? ui('downloadCollectionProducts')
+        : pageState === 'shopify-home'
+          ? ui('shopifyStoreHint')
+          : ui('hint');
+  const primaryAction = pageState === 'product' ? collect : collectCollection;
+  const primaryLabel =
+    pageState === 'collection'
+      ? ui('downloadCollectionProducts')
+      : pageState === 'shopify-home'
+        ? ui('downloadStoreProducts')
+        : product
+          ? ui('recollect')
+          : ui('collect');
   return (
     <section className="product-editor">
       <fieldset disabled={busy}>
@@ -305,9 +348,9 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
                 />
               </svg>
             </div>
-            <h2>{isNonShopify ? ui('nonShopifyTitle') : ui('ready')}</h2>
-            <p>{isNonShopify ? ui('sourcingPrompt') : ui('hint')}</p>
-            {isNonShopify && sourcingSites.length > 0 && (
+            <h2>{emptyTitle}</h2>
+            <p>{emptyHint}</p>
+            {pageState === 'non-shopify' && sourcingSites.length > 0 && (
               <div className="sourcing-sites">
                 {sourcingSites.map((site) => (
                   <a key={site.id} href={site.url} target="_blank" rel="noreferrer">
@@ -337,18 +380,17 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
             </div>
           </div>
         )}
-        <button className="collect-button" disabled={busy} onClick={() => void run(collect)}>
-          <span aria-hidden="true">↓ </span>
-          {product ? ui('recollect') : ui('collect')}
-        </button>
-        <button
-          className="secondary-button"
-          disabled={busy}
-          onClick={() => void run(collectCollection)}
-        >
-          {ui('collectCollection')}
-        </button>
-        {!product && <p className="local-hint">{ui('local')}</p>}
+        {pageState !== 'non-shopify' && (
+          <button
+            className="collect-button"
+            disabled={busy}
+            onClick={() => void run(primaryAction)}
+          >
+            <span aria-hidden="true">↓ </span>
+            {primaryLabel}
+          </button>
+        )}
+        {!product && pageState !== 'non-shopify' && <p className="local-hint">{ui('local')}</p>}
         {busy && tabId !== undefined && (
           <button
             onClick={() => void request({ action: 'cancelCollect', tabId }).catch(() => undefined)}
