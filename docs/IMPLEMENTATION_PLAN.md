@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-13 插件当前标签页变化刷新：产品页不再只在侧栏打开时识别一次；监听当前标签页 URL、加载完成和标签切换，用户从 Shopify 首页进入商品页或 collection 页时自动刷新提示和主按钮，并清掉上一页面的临时采集状态。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有提醒。
+
 - 2026-09-13 插件 Shopify 页面类型采集提示调整：产品页按当前标签页分为 Shopify 首页/普通页、collection 页、商品页和非 Shopify 页；首页/普通页按钮为下载本站全部商品，collection 页为下载本 collection 全部商品，商品页为下载当前商品；非 Shopify 页不显示采集按钮，只显示后台配置的选品网站推荐。首页/普通页全站下载复用 Shopify `/products.json?limit=50`，保持首版最多 50 个商品限制。已执行 lint、typecheck、@runad123/extension build、@runad123/web build 通过；Web 构建仍有既有 Next Windows SWC 回退 WASM 警告，插件构建仍有 sidepanel chunk 超 500k 的既有提醒。
 
 - 2026-09-13 插件非 Shopify 页面引导调整：产品页默认入口保持不变；当前标签页识别为非 Shopify 时显示“非 Shop 店铺”和一行选品提示，并展示后台配置的选品网站推荐。后台主题返利页新增“选品网站推荐”配置，服务端新增公开 `/sourcing-sites` 与管理员 `/admin/sourcing-sites` 接口，配置存入 settings，不新增业务数据库。已执行 lint、typecheck、@runad123/extension build、@runad123/web build 通过；Web 构建仍有既有 Next Windows SWC 回退 WASM 警告，插件构建仍有 sidepanel chunk 超 500k 的既有提醒。
@@ -261,6 +263,7 @@
 - 先做可运行纵向流程，再补细节；以测试结果推进，避免一次生成所有模块后再集中修错。
 - 出现契约不一致时先修正最小规格冲突并记录；遇到鉴权、CSV 实际导入或并发计费问题时集中复核。
 - 模型推理档位不作为质量保障；关键验收和真实集成结果才决定阶段是否完成。
+
 
 
 

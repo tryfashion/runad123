@@ -88,39 +88,65 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
     setDirty(false);
   }
   useEffect(() => {
-    void chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(async ([tab]) => {
-        if (tab?.id === undefined || !tab.url || !/^https?:/.test(tab.url)) return;
-        try {
-          const url = new URL(tab.url);
-          const productPage = /\/products\/[^/]+/.test(url.pathname);
-          const collectionPage = /\/collections(?:\/[^/?#]+)?\/?$/.test(url.pathname);
-          const [result] = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: readWebsite,
-          });
-          setPageState(
-            result?.result?.shopify === false
-              ? 'non-shopify'
-              : productPage
-                ? 'product'
-                : collectionPage
-                  ? 'collection'
-                  : 'shopify-home',
-          );
-        } catch {
-          const path = new URL(tab.url).pathname;
-          setPageState(
-            /\/products\/[^/]+/.test(path)
+    let activeUrl = '';
+    async function refreshPageState(tab?: chrome.tabs.Tab) {
+      const current =
+        tab ?? (await chrome.tabs.query({ active: true, currentWindow: true })).find(Boolean);
+      if (current?.id === undefined || !current.url || !/^https?:/.test(current.url)) {
+        setPageState('unknown');
+        return;
+      }
+      if (current.url !== activeUrl) {
+        activeUrl = current.url;
+        setProduct(null);
+        setCollectionProducts([]);
+        setCollectionSummary(null);
+        setDraft(null);
+        setEdits(null);
+        setDirty(false);
+        setAutoRisk(false);
+        setMessage('');
+      }
+      try {
+        const url = new URL(current.url);
+        const productPage = /\/products\/[^/]+/.test(url.pathname);
+        const collectionPage = /\/collections(?:\/[^/?#]+)?\/?$/.test(url.pathname);
+        const [result] = await chrome.scripting.executeScript({
+          target: { tabId: current.id },
+          func: readWebsite,
+        });
+        setPageState(
+          result?.result?.shopify === false
+            ? 'non-shopify'
+            : productPage
               ? 'product'
-              : /\/collections(?:\/[^/?#]+)?\/?$/.test(path)
+              : collectionPage
                 ? 'collection'
-                : 'unknown',
-          );
-        }
-      })
-      .catch(() => undefined);
+                : 'shopify-home',
+        );
+      } catch {
+        const path = new URL(current.url).pathname;
+        setPageState(
+          /\/products\/[^/]+/.test(path)
+            ? 'product'
+            : /\/collections(?:\/[^/?#]+)?\/?$/.test(path)
+              ? 'collection'
+              : 'unknown',
+        );
+      }
+    }
+    const updated: Parameters<typeof chrome.tabs.onUpdated.addListener>[0] = (
+      _tabId,
+      change,
+      tab,
+    ) => {
+      if (tab.active && tab.url && (change.url || change.status === 'complete'))
+        void refreshPageState(tab).catch(() => undefined);
+    };
+    const activated = () => void refreshPageState().catch(() => undefined);
+    void refreshPageState().catch(() => undefined);
+    chrome.tabs.onUpdated.addListener(updated);
+    chrome.tabs.onActivated.addListener(activated);
     void fetch(__RUNAD_API_ORIGIN__ + '/api/v1/sourcing-sites', { credentials: 'omit' })
       .then(async (response) =>
         response.ok ? sourcingSitesResponseSchema.parse((await response.json()).data).items : [],
@@ -203,7 +229,11 @@ export function ProductPanel({ locale, onAccount }: { locale: UiLocale; onAccoun
       }
     };
     chrome.storage.onChanged.addListener(changed);
-    return () => chrome.storage.onChanged.removeListener(changed);
+    return () => {
+      chrome.tabs.onUpdated.removeListener(updated);
+      chrome.tabs.onActivated.removeListener(activated);
+      chrome.storage.onChanged.removeListener(changed);
+    };
   }, []);
   function edit(patch: Partial<Edits>) {
     if (!edits || !draft) return;
