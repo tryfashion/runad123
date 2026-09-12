@@ -1,0 +1,47 @@
+{
+  "name": "runad123",
+  "version": "0.0.1",
+  "private": true,
+  "pnpm": {
+    "ignoredOptionalDependencies": [
+      "@next/swc-win32-x64-msvc"
+    ]
+  },
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=24.13.0 <25"
+  },
+  "scripts": {
+    "dev:web": "pnpm build:packages && pnpm --filter @runad123/web dev",
+    "dev:extension": "pnpm build:packages && pnpm --filter @runad123/extension dev",
+    "dev:worker": "pnpm build:packages && pnpm --filter @runad123/worker dev",
+    "build:packages": "pnpm --filter \"./packages/**\" -r build",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm build:packages && pnpm -r typecheck && tsc -p tsconfig.tools.json",
+    "lint": "prettier --check . && node scripts/check-boundaries.mjs",
+    "format": "prettier --write .",
+    "test": "pnpm build:packages && vitest run",
+    "test:e2e": "node scripts/run-playwright.mjs test",
+    "test:browser-install": "node scripts/run-playwright.mjs install chromium",
+    "db:migrate": "pnpm build:packages && node --env-file-if-exists=.env packages/db/dist/migrate.js",
+    "probe:csv": "tsx scripts/probe-csv.ts",
+    "admin:bootstrap": "pnpm build:packages && node --env-file-if-exists=.env packages/server-core/dist/bootstrap-admin.js",
+    "test:mysql": "pnpm build:packages && node --env-file-if-exists=.env.test --import tsx scripts/test-mysql.ts",
+    "ai:configure:rewrite": "pnpm build:packages && node --env-file-if-exists=.env --import tsx scripts/configure-ai.ts --rewrite",
+    "ai:configure": "pnpm build:packages && node --env-file-if-exists=.env --import tsx scripts/configure-ai.ts",
+    "test:mysql:m6": "pnpm build:packages && node --env-file-if-exists=.env.test --import tsx scripts/test-mysql-m6.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.10.1",
+    "@types/chrome": "0.2.9",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "prettier": "3.9.6",
+    "lossless-json": "4.3.1",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  }
+}

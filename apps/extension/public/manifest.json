@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extensionName__",
+  "description": "__MSG_extensionDescription__",
+  "version": "0.0.1",
+  "minimum_chrome_version": "120",
+  "default_locale": "en",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "activeTab",
+    "scripting",
+    "downloads",
+    "offscreen",
+    "alarms"
+  ],
+  "action": {
+    "default_title": "runad123"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  },
+  "optional_host_permissions": ["http://*/*", "https://*/*"]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@runad123/server-core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@runad123/db": "workspace:*",
+    "@runad123/contracts": "workspace:*",
+    "zod": "4.6.2",
+    "nodemailer": "10.0.8",
+    "@runad123/product-core": "workspace:*",
+    "sanitize-html": "2.17.7",
+    "htmlparser2": "12.0.0"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "8.0.1",
+    "@types/sanitize-html": "2.16.1"
+  }
+}

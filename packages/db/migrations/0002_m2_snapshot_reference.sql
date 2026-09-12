@@ -1,0 +1,1 @@
+ALTER TABLE `source_products` ADD CONSTRAINT `source_products_latest_snapshot_id_product_snapshots_id_fk` FOREIGN KEY (`latest_snapshot_id`) REFERENCES `product_snapshots`(`id`) ON DELETE restrict ON UPDATE no action;

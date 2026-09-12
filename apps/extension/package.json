@@ -1,0 +1,23 @@
+{
+  "name": "@runad123/extension",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "vite build --mode development",
+    "build:release": "vite build --mode production",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@runad123/contracts": "workspace:*",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.2",
+    "@runad123/product-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.2.9",
+    "vite": "8.3.0"
+  }
+}

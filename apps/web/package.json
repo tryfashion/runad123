@@ -1,0 +1,20 @@
+{
+  "name": "@runad123/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env node_modules/next/dist/bin/next dev --webpack --hostname 127.0.0.1",
+    "build": "next build --webpack",
+    "typecheck": "tsc --noEmit",
+    "start": "next start --hostname 127.0.0.1"
+  },
+  "dependencies": {
+    "@next/swc-wasm-nodejs": "16.3.5",
+    "@runad123/contracts": "workspace:*",
+    "@runad123/server-core": "workspace:*",
+    "next": "16.3.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  }
+}

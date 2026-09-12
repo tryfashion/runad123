@@ -1,0 +1,29 @@
+{
+  "name": "@runad123/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./i18n": "./dist/i18n.js",
+    "./auth": "./dist/auth.js",
+    "./auth-i18n": "./dist/auth-i18n.js",
+    "./product": "./dist/product.js",
+    "./product-i18n": "./dist/product-i18n.js",
+    "./risk": "./dist/risk.js",
+    "./risk-i18n": "./dist/risk-i18n.js",
+    "./admin": "./dist/admin.js",
+    "./admin-i18n": "./dist/admin-i18n.js",
+    "./export": "./dist/export.js",
+    "./export-i18n": "./dist/export-i18n.js",
+    "./rewrite": "./dist/rewrite.js",
+    "./rewrite-i18n": "./dist/rewrite-i18n.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "zod": "4.6.2"
+  }
+}

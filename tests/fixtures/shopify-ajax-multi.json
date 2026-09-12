@@ -1,0 +1,28 @@
+{
+  "id": 9007199254740993,
+  "title": "Trail mug, \"Forest\" edition",
+  "handle": "runad123-probe-trail-mug",
+  "description": "A synthetic product for local CSV verification.\n容量 350 ml.",
+  "options": [{ "name": "Color", "position": 1 }],
+  "variants": [
+    {
+      "id": 9007199254740995,
+      "options": ["Green"],
+      "price": 2499,
+      "sku": "PROBE-GREEN",
+      "featured_image": { "src": "https://example.com/probe-green.jpg" }
+    },
+    {
+      "id": 9007199254740997,
+      "options": ["Sand"],
+      "price": 2599,
+      "sku": "PROBE-SAND",
+      "featured_image": { "src": "https://example.com/probe-sand.jpg" }
+    }
+  ],
+  "images": [
+    "https://example.com/probe-green.jpg",
+    "https://example.com/probe-sand.jpg",
+    "https://example.com/probe-detail.jpg"
+  ]
+}
