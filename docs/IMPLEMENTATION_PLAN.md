@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-13 网页内抽屉注入函数作用域修复：修复点击图标后页面控制台报 `Q is not defined` 的问题；Chrome scripting 只序列化被注入函数本体，因此将样式辅助函数移入注入函数内部，避免打包后的外部符号在页面环境缺失。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。
+
 - 2026-09-13 网页内抽屉显示稳定性修复：针对点击图标后页面右侧只抖动、不显示抽屉的问题，注入层改为普通 DOM 与直接 style 设置，并由后台传入扩展 iframe 地址，减少 Shadow DOM/style 标签在目标网页里的兼容影响。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。
 
 - 2026-09-13 插件入口改为网页内右侧抽屉：按用户对 Shopify Scraper and analyzer 的体验要求，点击插件图标后不再打开浏览器框架外的 sidePanel，也不使用图标 popup，而是向当前网页注入遮罩和右侧 iframe 抽屉；页面跳转会随网页销毁，重新点击图标再按当前页识别。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。

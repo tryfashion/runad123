@@ -2,11 +2,10 @@ import './download-background';
 import './product-background';
 import './auth-background';
 
-function setStyles(element: HTMLElement, styles: Record<string, string>) {
-  for (const [key, value] of Object.entries(styles)) element.style.setProperty(key, value);
-}
-
 function toggleInjectedDrawer(frameUrl: string) {
+  const setStyles = (element: HTMLElement, styles: Record<string, string>) => {
+    for (const [key, value] of Object.entries(styles)) element.style.setProperty(key, value);
+  };
   const existing = document.getElementById('runad123-extension-drawer-root');
   if (existing) {
     existing.remove();
