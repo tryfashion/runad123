@@ -9,6 +9,14 @@ readEnvironment(process.env);
 
 export default {
   poweredByHeader: false,
+  async headers() {
+    return [
+      {
+        source: '/admin/:path*',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow, nosnippet' }],
+      },
+    ];
+  },
   agentRules: false,
   outputFileTracingRoot: root,
   transpilePackages: ['@runad123/contracts', '@runad123/server-core'],

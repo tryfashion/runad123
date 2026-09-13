@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-14 后台/admin及子路由新增X-Robots-Tag和robots metadata（noindex/nofollow/nosnippet），robots.txt单独禁止常见AI爬虫抓取后台。普通搜索爬虫保留读取noindex入口；规则不能保证恶意爬虫遵守，也不替代后台鉴权。需部署网站生效。
+
 - 2026-09-14 网站新增浅底蓝色大写R favicon，与插件共用现有品牌图形；App Router icon.svg及多尺寸favicon.ico覆盖全站页面，ICO含16/32/48尺寸PNG。需部署网站后生效。
 
 - 2026-09-14 网站概览忽略 cdn1.intercartclothing.com；新检测和每日旧缓存读取同步过滤，数量随过滤结果计算，不触发重新抓取。仅插件变更，无服务器更新。
