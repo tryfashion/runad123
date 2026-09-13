@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { WebsiteOverview } from './website-overview.js';
-export const overviewCachePrefix = 'websiteOverview:v1:';
+export const overviewCachePrefix = 'websiteOverview:v2:';
 export const beijingDay = (time: number) => new Date(time + 8 * 3600000).toISOString().slice(0, 10);
 export const overviewCacheKey = (url: string) => overviewCachePrefix + new URL(url).origin;
 const entrySchema = z.object({

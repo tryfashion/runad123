@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-13 网站概览 Shopify 索引补强：缓存版本升级强制重读；概览读取 sitemap.xml 及产品/系列子 sitemap 来统计商品和 collection 数、发布日期，并在公开产品接口不可用时抽样读取 product .js 补价格；概览页始终显示手动刷新按钮，便于验证最新识别结果。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。
+
 - 2026-09-13 网站概览识别补强：针对概览页多项未识别，技术识别扩大到 script/link/img/iframe/noscript 和页面 HTML，增加更多 Shopify 常见应用规则；商品与价格增加 collections/all/products.json 兜底、DOM 价格和 JSON-LD offer 解析，减少公开产品接口不可用时的空白。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。
 
 - 2026-09-13 插件网站概览增强：网站概览页改为竞品参考的店铺卡片布局，直接显示 Shopify 基础信息、主题和 Meta Ads 链接、公开商品样本统计、collection 数、价格区间，以及当前页检测到的常见广告像素和应用脚本；商品总量受公开接口限制时不编造完整店铺总数。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。

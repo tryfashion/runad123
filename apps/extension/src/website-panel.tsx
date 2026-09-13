@@ -227,11 +227,9 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
       )}
       {busy && <p role="status">{t('loading')}</p>}
       {error && <p role="status">{t(error)}</p>}
-      {(!data || error) && (
-        <button className="website-refresh" disabled={busy} onClick={() => void load(true)}>
-          {t('refresh')}
-        </button>
-      )}
+      <button className="website-refresh" disabled={busy} onClick={() => void load(true)}>
+        {t('refresh')}
+      </button>
     </section>
   );
 }

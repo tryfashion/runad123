@@ -179,11 +179,15 @@ export async function readWebsite() {
   );
 
   let productsRead = 0;
+  let collectionsRead = collectionLinks.length;
   let firstPublished = '';
   let latestPublished = '';
   let lowestPrice: number | null = null;
   let averagePrice: number | null = null;
   let highestPrice: number | null = null;
+  const sitemapProductUrls = new Set<string>();
+  const sitemapCollectionUrls = new Set<string>();
+  const sitemapProductLastmods: string[] = [];
   const productPrices = new Set<number>();
   const addPrice = (value: unknown) => {
     const parsed = money(value);
@@ -192,7 +196,14 @@ export async function readWebsite() {
   const parseProductList = (products: unknown[]) => {
     productsRead = Math.max(productsRead, products.length);
     const dates = products
-      .map((product) => text((product as { published_at?: unknown }).published_at))
+      .map((product) =>
+        text(
+          (product as { published_at?: unknown; publishedAt?: unknown; created_at?: unknown })
+            .published_at ??
+            (product as { publishedAt?: unknown }).publishedAt ??
+            (product as { created_at?: unknown }).created_at,
+        ),
+      )
       .filter(Boolean)
       .sort();
     firstPublished = firstPublished || dates[0] || '';
@@ -200,13 +211,50 @@ export async function readWebsite() {
     for (const product of products) {
       if (Array.isArray((product as { variants?: unknown }).variants)) {
         for (const variant of (product as { variants: Array<{ price?: unknown }> }).variants) {
-          addPrice(variant.price);
+          const rawPrice = money(variant.price);
+          if (rawPrice !== null) addPrice(rawPrice > 999 ? rawPrice / 100 : rawPrice);
         }
       }
     }
   };
+  const parseSitemapXml = (xml: string) => {
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    return Array.from(doc.querySelectorAll('url, sitemap')).map((node) => ({
+      loc: text(node.querySelector('loc')?.textContent, 2048),
+      lastmod: text(node.querySelector('lastmod')?.textContent),
+    }));
+  };
   try {
     if (marker) {
+      const queue = [new URL('/sitemap.xml', location.origin).href];
+      const seen = new Set<string>();
+      while (queue.length && seen.size < 12) {
+        const sitemapUrl = queue.shift()!;
+        if (seen.has(sitemapUrl)) continue;
+        seen.add(sitemapUrl);
+        const response = await fetch(sitemapUrl, { credentials: 'omit', cache: 'no-store' });
+        if (!response.ok) continue;
+        for (const entry of parseSitemapXml(await response.text())) {
+          if (!entry.loc.startsWith(location.origin)) continue;
+          if (/sitemap.*\.xml/i.test(entry.loc)) {
+            if (/product|collection|sitemap/i.test(entry.loc)) queue.push(entry.loc);
+            continue;
+          }
+          const url = new URL(entry.loc);
+          if (/\/products\/[^/?#]+/.test(url.pathname)) {
+            sitemapProductUrls.add(url.href);
+            if (entry.lastmod) sitemapProductLastmods.push(entry.lastmod);
+          } else if (/\/collections\/[^/?#]+/.test(url.pathname)) {
+            sitemapCollectionUrls.add(url.href);
+          }
+        }
+      }
+      productsRead = Math.max(productsRead, sitemapProductUrls.size);
+      collectionsRead = Math.max(collectionsRead, sitemapCollectionUrls.size);
+      const sitemapDates = sitemapProductLastmods.filter(Boolean).sort();
+      firstPublished = firstPublished || sitemapDates[0] || '';
+      latestPublished = latestPublished || sitemapDates.at(-1) || '';
+
       for (const path of ['/products.json?limit=50', '/collections/all/products.json?limit=50']) {
         const response = await fetch(new URL(path, location.origin), {
           credentials: 'omit',
@@ -220,9 +268,23 @@ export async function readWebsite() {
           break;
         }
       }
+      if (!productPrices.size && sitemapProductUrls.size) {
+        const sample = Array.from(sitemapProductUrls).slice(0, 50);
+        for (const productUrl of sample) {
+          try {
+            const url = new URL(productUrl);
+            const jsonUrl = new URL(url.pathname.replace(/\/$/, '') + '.js', location.origin);
+            const response = await fetch(jsonUrl, { credentials: 'omit', cache: 'no-store' });
+            if (!response.ok) continue;
+            parseProductList([await response.json()]);
+          } catch {
+            /* Ignore individual product JSON failures. */
+          }
+        }
+      }
     }
   } catch {
-    /* Public Shopify product JSON is optional. */
+    /* Public Shopify product and sitemap endpoints are optional. */
   }
   const priceNodes = Array.from(
     document.querySelectorAll(
@@ -280,7 +342,7 @@ export async function readWebsite() {
     country: text(shopify?.country),
     language: text(document.documentElement.lang),
     productsRead,
-    collectionsRead: collectionLinks.length,
+    collectionsRead,
     firstPublished,
     latestPublished,
     lowestPrice,
