@@ -193,15 +193,36 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
               <div>
                 <h2>{t('technologies')}</h2>
                 <p>
-                  {data.pixels.length} {t('pixels')} · {data.apps.length} {t('apps')}
+                  {data.pixels.length} {t('pixels')} · {data.analytics.length} {t('analytics')} ·{' '}
+                  {data.apps.length + data.other.length} {t('apps')}
                 </p>
               </div>
             </div>
-            {data.pixels.length || data.apps.length ? (
-              <div className="website-tech-list">
-                {[...data.pixels, ...data.apps].map((item) => (
-                  <span key={item}>{item}</span>
-                ))}
+            {data.pixels.length ||
+            data.analytics.length ||
+            data.apps.length ||
+            data.other.length ? (
+              <div className="website-tech-groups">
+                {(
+                  [
+                    [t('pixels'), data.pixels],
+                    [t('analytics'), data.analytics],
+                    [t('apps'), [...data.apps, ...data.other]],
+                  ] as const
+                ).map(([label, items]) =>
+                  items.length ? (
+                    <div key={label}>
+                      <h3>
+                        {label} ({items.length})
+                      </h3>
+                      <div className="website-tech-list">
+                        {items.map((item) => (
+                          <span key={item}>{item}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null,
+                )}
               </div>
             ) : (
               <p className="website-note">{t('noTechnology')}</p>

@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-13 网站概览技术识别分类增强：检测结果新增 Pixels、Analytics、Other 分类；补充 Lucky Orange、Sensors Data 等分析工具规则，并自动提取第三方资源域名作为 Other 展示，缓存升级到 v3 以避免旧识别结果残留。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。
+
 - 2026-09-13 网站概览 Shopify 索引补强：缓存版本升级强制重读；概览读取 sitemap.xml 及产品/系列子 sitemap 来统计商品和 collection 数、发布日期，并在公开产品接口不可用时抽样读取 product .js 补价格；概览页始终显示手动刷新按钮，便于验证最新识别结果。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。
 
 - 2026-09-13 网站概览识别补强：针对概览页多项未识别，技术识别扩大到 script/link/img/iframe/noscript 和页面 HTML，增加更多 Shopify 常见应用规则；商品与价格增加 collections/all/products.json 兜底、DOM 价格和 JSON-LD offer 解析，减少公开产品接口不可用时的空白。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。

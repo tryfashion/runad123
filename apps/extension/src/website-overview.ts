@@ -25,6 +25,8 @@ const en = {
   technologies: 'Detected technology',
   pixels: 'pixels',
   apps: 'apps',
+  analytics: 'analytics',
+  other: 'other',
   noTechnology: 'No pixels or apps detected on this page.',
   note: 'Based on the current page and public Shopify endpoints. Product counts may be limited by what the store exposes.',
   open: 'Open website',
@@ -58,6 +60,8 @@ const dictionary: Record<UiLocale, typeof en> = {
     technologies: '检测到的技术',
     pixels: '像素',
     apps: '应用',
+    analytics: '分析',
+    other: '其他',
     noTechnology: '当前页面未检测到像素或应用脚本。',
     note: '信息来自当前页面和公开 Shopify 接口；商品数受店铺公开接口限制。',
     open: '打开网站',
@@ -89,6 +93,8 @@ const dictionary: Record<UiLocale, typeof en> = {
     technologies: '偵測到的技術',
     pixels: '像素',
     apps: '應用',
+    analytics: '分析',
+    other: '其他',
     noTechnology: '目前頁面未偵測到像素或應用腳本。',
     note: '資訊來自目前頁面和公開 Shopify 介面；商品數受商店公開介面限制。',
     open: '開啟網站',
@@ -116,28 +122,40 @@ export async function readWebsite() {
       };
     }
   ).Shopify;
-  const scripts = Array.from(document.scripts).map((script) => ({
-    src: script.src,
-    text: script.src ? '' : (script.textContent ?? '').slice(0, 5000),
-  }));
-  const scriptHaystack = scripts.map((script) => script.src + '\n' + script.text).join('\n');
+  const assetValues: string[] = [
+    ...Array.from(document.scripts).flatMap((script) => [script.src, script.textContent ?? '']),
+    ...Array.from(document.querySelectorAll<HTMLLinkElement>('link[href]')).map(
+      (link) => link.href,
+    ),
+    ...Array.from(document.querySelectorAll<HTMLImageElement>('img[src]')).map(
+      (image) => image.src,
+    ),
+    ...Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe[src]')).map(
+      (frame) => frame.src,
+    ),
+    ...Array.from(document.querySelectorAll('noscript')).map((node) => node.textContent ?? ''),
+    document.documentElement.innerHTML.slice(0, 120000),
+  ];
+  const scriptHaystack = assetValues.join('\n');
   const marker =
     !!shopify ||
     !!document.querySelector('script[src*="cdn.shopify.com"],script[src*="/cdn/shop/"]') ||
     /Shopify\.(shop|routes|theme)/.test(scriptHaystack);
 
   const pixelRules: Array<[string, RegExp]> = [
-    ['Meta Pixel', /connect\.facebook\.net|fbq\(|facebook\.com\/tr/i],
-    ['Google Tag', /googletagmanager\.com|gtag\(|google-analytics\.com|G-[A-Z0-9]+/i],
-    ['TikTok Pixel', /analytics\.tiktok\.com|ttq\(/i],
+    ['Meta Pixel (Facebook/Instagram)', /connect\.facebook\.net|fbq\(|facebook\.com\/tr/i],
     ['Pinterest Tag', /ct\.pinterest\.com|pintrk\(/i],
+    ['TikTok Pixel', /analytics\.tiktok\.com|ttq\(/i],
     ['Snap Pixel', /sc-static\.net|snaptr\(/i],
-    ['Microsoft Clarity', /clarity\.ms|clarity\(/i],
   ];
-  const pixels = uniq(
-    pixelRules.filter(([, rule]) => rule.test(scriptHaystack)).map(([name]) => name),
-  );
-
+  const analyticsRules: Array<[string, RegExp]> = [
+    ['Google Analytics', /googletagmanager\.com|gtag\(|google-analytics\.com|G-[A-Z0-9]+/i],
+    ['Microsoft Clarity', /clarity\.ms|clarity\(/i],
+    ['Lucky Orange', /luckyorange|lucky-orange/i],
+    ['Sensors Data', /sensorsdata|sensors-data|sensors_data/i],
+    ['Hotjar', /hotjar/i],
+    ['Triple Whale', /triplewhale|triple-whale/i],
+  ];
   const appRules: Array<[string, RegExp]> = [
     ['Klaviyo', /klaviyo/i],
     ['Judge.me', /judge\.me|judgeme/i],
@@ -148,8 +166,6 @@ export async function readWebsite() {
     ['Shopify Reviews', /productreviews\.shopifycdn/i],
     ['Afterpay', /afterpay/i],
     ['Shop Pay', /shopify_pay|shop-pay|shopify-payment/i],
-    ['Hotjar', /hotjar/i],
-    ['Triple Whale', /triplewhale|triple-whale/i],
     ['Postscript', /postscript/i],
     ['Attentive', /attentive/i],
     ['Omnisend', /omnisend/i],
@@ -163,7 +179,43 @@ export async function readWebsite() {
     ['Vitals', /vitals/i],
     ['Avada', /avada/i],
   ];
+  const pixels = uniq(
+    pixelRules.filter(([, rule]) => rule.test(scriptHaystack)).map(([name]) => name),
+  );
+  const analytics = uniq(
+    analyticsRules.filter(([, rule]) => rule.test(scriptHaystack)).map(([name]) => name),
+  );
   const apps = uniq(appRules.filter(([, rule]) => rule.test(scriptHaystack)).map(([name]) => name));
+  const knownDomains = [
+    location.hostname,
+    'cdn.shopify.com',
+    'shopifycdn.net',
+    'myshopify.com',
+    'googletagmanager.com',
+    'google-analytics.com',
+    'facebook.com',
+    'facebook.net',
+    'pinterest.com',
+    'tiktok.com',
+  ];
+  const thirdPartyDomains = uniq(
+    assetValues
+      .flatMap((value) =>
+        Array.from(value.matchAll(/https?:\/\/([^\/\s"'<>]+)/gi)).map((match) => match[1] ?? ''),
+      )
+      .map((host) => host.toLowerCase().replace(/^www\./, ''))
+      .filter(
+        (host) =>
+          host && !knownDomains.some((known) => host === known || host.endsWith('.' + known)),
+      ),
+  );
+  const namedTechnology = new Set(
+    [...pixels, ...analytics, ...apps].map((item) => item.toLowerCase()),
+  );
+  const other = thirdPartyDomains.filter(
+    (host) =>
+      !Array.from(namedTechnology).some((name) => host.includes(name.split(' ')[0] ?? name)),
+  );
 
   const collectionLinks = uniq(
     Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/collections/"]')).map(
@@ -350,6 +402,8 @@ export async function readWebsite() {
     highestPrice,
     pixels,
     apps,
+    analytics,
+    other,
     metaAdsUrl,
   };
 }
