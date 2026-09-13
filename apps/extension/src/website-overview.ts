@@ -11,12 +11,24 @@ const en = {
   platform: 'Platform',
   domain: 'Store domain',
   theme: 'Theme',
+  metaAds: 'Meta Ads',
+  products: 'Products read',
+  collections: 'Collections',
+  firstPublished: 'First published',
+  latestPublished: 'Latest published',
   currency: 'Currency',
   country: 'Market country',
   language: 'Page language',
-  note: 'Based on the current page. Market settings do not establish the merchant’s location.',
+  lowestPrice: 'Lowest price',
+  averagePrice: 'Average price',
+  highestPrice: 'Highest price',
+  technologies: 'Detected technology',
+  pixels: 'pixels',
+  apps: 'apps',
+  noTechnology: 'No pixels or apps detected on this page.',
+  note: 'Based on the current page and public Shopify endpoints. Product counts may be limited by what the store exposes.',
   open: 'Open website',
-  title: 'Website information',
+  title: 'Website overview',
 };
 const dictionary: Record<UiLocale, typeof en> = {
   en,
@@ -32,12 +44,24 @@ const dictionary: Record<UiLocale, typeof en> = {
     platform: '建站平台',
     domain: '店铺域名',
     theme: '主题',
+    metaAds: 'Meta Ads',
+    products: '商品数',
+    collections: '系列数',
+    firstPublished: '首次发布',
+    latestPublished: '最近发布',
     currency: '货币',
-    country: '市场国家',
-    language: '页面语言',
-    note: '信息来自当前页面；市场设置不代表商家所在地。',
+    country: '国家/地区',
+    language: '语言',
+    lowestPrice: '最低价',
+    averagePrice: '平均价',
+    highestPrice: '最高价',
+    technologies: '检测到的技术',
+    pixels: '像素',
+    apps: '应用',
+    noTechnology: '当前页面未检测到像素或应用脚本。',
+    note: '信息来自当前页面和公开 Shopify 接口；商品数受店铺公开接口限制。',
     open: '打开网站',
-    title: '网站信息',
+    title: '网站概览',
   },
   'zh-Hant': {
     cached: '快取時間（北京時間）',
@@ -51,19 +75,37 @@ const dictionary: Record<UiLocale, typeof en> = {
     platform: '建站平台',
     domain: '商店網域',
     theme: '佈景主題',
+    metaAds: 'Meta Ads',
+    products: '商品數',
+    collections: '系列數',
+    firstPublished: '首次發佈',
+    latestPublished: '最近發佈',
     currency: '貨幣',
-    country: '市場國家',
-    language: '頁面語言',
-    note: '資訊來自目前頁面；市場設定不代表商家所在地。',
+    country: '國家/地區',
+    language: '語言',
+    lowestPrice: '最低價',
+    averagePrice: '平均價',
+    highestPrice: '最高價',
+    technologies: '偵測到的技術',
+    pixels: '像素',
+    apps: '應用',
+    noTechnology: '目前頁面未偵測到像素或應用腳本。',
+    note: '資訊來自目前頁面和公開 Shopify 介面；商品數受商店公開介面限制。',
     open: '開啟網站',
-    title: '網站資訊',
+    title: '網站概覽',
   },
 };
 export const overviewText = (locale: UiLocale, key: keyof typeof en) => dictionary[locale][key];
 
 // Serialized by Chrome into the current page; keep this function self-contained.
-export function readWebsite() {
-  const text = (value: unknown) => (typeof value === 'string' ? value.slice(0, 250) : '');
+export async function readWebsite() {
+  const text = (value: unknown, max = 250) =>
+    typeof value === 'string' ? value.trim().slice(0, max) : '';
+  const uniq = (values: string[]) => Array.from(new Set(values.filter(Boolean))).slice(0, 12);
+  const money = (value: unknown) => {
+    const n = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+    return Number.isFinite(n) ? n : null;
+  };
   const shopify = (
     window as typeof window & {
       Shopify?: {
@@ -74,9 +116,100 @@ export function readWebsite() {
       };
     }
   ).Shopify;
+  const scripts = Array.from(document.scripts).map((script) => ({
+    src: script.src,
+    text: script.src ? '' : (script.textContent ?? '').slice(0, 5000),
+  }));
+  const scriptHaystack = scripts.map((script) => script.src + '\n' + script.text).join('\n');
   const marker =
     !!shopify ||
-    !!document.querySelector('script[src*="cdn.shopify.com"],script[src*="/cdn/shop/"]');
+    !!document.querySelector('script[src*="cdn.shopify.com"],script[src*="/cdn/shop/"]') ||
+    /Shopify\.(shop|routes|theme)/.test(scriptHaystack);
+
+  const pixelRules: Array<[string, RegExp]> = [
+    ['Meta Pixel', /connect\.facebook\.net|fbq\(|facebook\.com\/tr/i],
+    ['Google Tag', /googletagmanager\.com|gtag\(|google-analytics\.com|G-[A-Z0-9]+/i],
+    ['TikTok Pixel', /analytics\.tiktok\.com|ttq\(/i],
+    ['Pinterest Tag', /ct\.pinterest\.com|pintrk\(/i],
+    ['Snap Pixel', /sc-static\.net|snaptr\(/i],
+    ['Microsoft Clarity', /clarity\.ms|clarity\(/i],
+  ];
+  const pixels = uniq(
+    pixelRules.filter(([, rule]) => rule.test(scriptHaystack)).map(([name]) => name),
+  );
+
+  const appRules: Array<[string, RegExp]> = [
+    ['Klaviyo', /klaviyo/i],
+    ['Judge.me', /judge\.me|judgeme/i],
+    ['Loox', /loox/i],
+    ['Yotpo', /yotpo/i],
+    ['Gorgias', /gorgias/i],
+    ['Recharge', /recharge/i],
+    ['Shopify Reviews', /productreviews\.shopifycdn/i],
+    ['Afterpay', /afterpay/i],
+    ['Shop Pay', /shopify_pay|shop-pay/i],
+    ['Hotjar', /hotjar/i],
+    ['Triple Whale', /triplewhale/i],
+    ['Postscript', /postscript/i],
+  ];
+  const apps = uniq(appRules.filter(([, rule]) => rule.test(scriptHaystack)).map(([name]) => name));
+
+  const collectionLinks = uniq(
+    Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/collections/"]')).map(
+      (link) => {
+        try {
+          const url = new URL(link.href, location.href);
+          return url.pathname.replace(/\/$/, '');
+        } catch {
+          return '';
+        }
+      },
+    ),
+  );
+
+  let productsRead = 0;
+  let firstPublished = '';
+  let latestPublished = '';
+  let lowestPrice: number | null = null;
+  let averagePrice: number | null = null;
+  let highestPrice: number | null = null;
+  try {
+    if (marker) {
+      const response = await fetch(new URL('/products.json?limit=50', location.origin), {
+        credentials: 'omit',
+        cache: 'no-store',
+      });
+      if (response.ok) {
+        const body = (await response.json()) as { products?: unknown[] };
+        const products = Array.isArray(body.products) ? body.products : [];
+        productsRead = products.length;
+        const dates = products
+          .map((product) => text((product as { published_at?: unknown }).published_at))
+          .filter(Boolean)
+          .sort();
+        firstPublished = dates[0] ?? '';
+        latestPublished = dates.at(-1) ?? '';
+        const prices = products
+          .flatMap((product) =>
+            Array.isArray((product as { variants?: unknown }).variants)
+              ? ((product as { variants: Array<{ price?: unknown }> }).variants ?? []).map(
+                  (variant) => money(variant.price),
+                )
+              : [],
+          )
+          .filter((price): price is number => price !== null);
+        if (prices.length) {
+          lowestPrice = Math.min(...prices);
+          highestPrice = Math.max(...prices);
+          averagePrice = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+        }
+      }
+    }
+  } catch {
+    /* Public Shopify product JSON is optional. */
+  }
+
+  const metaAdsUrl = `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=ALL&search_type=page&view_all_page_id=&q=${encodeURIComponent(location.hostname)}`;
   return {
     url: location.origin,
     pageUrl: location.href,
@@ -90,6 +223,16 @@ export function readWebsite() {
     currency: text(shopify?.currency?.active),
     country: text(shopify?.country),
     language: text(document.documentElement.lang),
+    productsRead,
+    collectionsRead: collectionLinks.length,
+    firstPublished,
+    latestPublished,
+    lowestPrice,
+    averagePrice,
+    highestPrice,
+    pixels,
+    apps,
+    metaAdsUrl,
   };
 }
-export type WebsiteOverview = ReturnType<typeof readWebsite>;
+export type WebsiteOverview = Awaited<ReturnType<typeof readWebsite>>;

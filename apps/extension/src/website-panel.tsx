@@ -3,6 +3,7 @@ import { cachedOverview, overviewCacheKey, saveOverview } from './website-cache'
 import { useEffect, useRef, useState } from 'react';
 import type { UiLocale } from '@runad123/contracts/i18n';
 import { readWebsite, overviewText, type WebsiteOverview } from './website-overview';
+
 export function WebsitePanel({ locale }: { locale: UiLocale }) {
   const t = (key: Parameters<typeof overviewText>[1]) => overviewText(locale, key);
   const [data, setData] = useState<WebsiteOverview | null>(null);
@@ -10,6 +11,22 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<'permission' | 'unavailable' | null>(null);
   const generation = useRef(0);
+  const date = (value: string) =>
+    value
+      ? new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'zh-CN', {
+          month: 'short',
+          day: '2-digit',
+          year: 'numeric',
+        }).format(new Date(value))
+      : t('unknown');
+  const price = (value: number | null) =>
+    value === null
+      ? t('unknown')
+      : new Intl.NumberFormat(locale === 'en' ? 'en-US' : 'zh-CN', {
+          style: 'currency',
+          currency: data?.currency || 'USD',
+          maximumFractionDigits: 2,
+        }).format(value);
   async function load(grant = false) {
     const version = ++generation.current;
     setBusy(true);
@@ -60,7 +77,7 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
       const result = await Promise.race([
         work(),
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(Error('unavailable')), 5000);
+          timer = setTimeout(() => reject(Error('unavailable')), 7000);
         }),
       ]);
       if (version === generation.current) setData(result);
@@ -98,34 +115,98 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
       </div>
       {data && (
         <>
-          <div className="website-card website-identity">
+          <div className="website-card website-hero">
             <div className="website-letter" aria-hidden="true">
               {data.host.charAt(0).toUpperCase()}
             </div>
-            <div>
-              <h2>{data.name || data.host}</h2>
+            <div className="website-hero-main">
+              <h2>
+                {data.name || data.host}
+                {data.shopify && <span title="Shopify"> 🛍️</span>}
+              </h2>
               <a href={data.url} target="_blank" rel="noreferrer">
-                {data.host} ↗
+                {data.domain || data.host} ↗
               </a>
+              <span>{data.host}</span>
             </div>
           </div>
-          <dl className="website-card website-facts">
-            {(['platform', 'domain', 'theme', 'currency', 'country', 'language'] as const).map(
-              (key) => (
-                <div key={key}>
-                  <dt>{t(key)}</dt>
-                  <dd>
-                    {key === 'theme' && data.theme ? (
-                      <ThemeAffiliate name={data.theme} locale={locale} />
-                    ) : (
-                      (key === 'platform' ? (data.shopify ? 'Shopify' : '') : data[key]) ||
-                      t('unknown')
-                    )}
-                  </dd>
-                </div>
-              ),
-            )}
+          <div className="website-card website-links-row">
+            <div>
+              <span>{t('theme')}</span>
+              <strong>
+                {data.theme ? <ThemeAffiliate name={data.theme} locale={locale} /> : t('unknown')}
+              </strong>
+            </div>
+            <a href={data.metaAdsUrl} target="_blank" rel="noreferrer">
+              {t('metaAds')} ↗
+            </a>
+          </div>
+          <dl className="website-card website-metrics">
+            <div>
+              <dt>{t('products')}</dt>
+              <dd>{data.productsRead || t('unknown')}</dd>
+            </div>
+            <div>
+              <dt>{t('collections')}</dt>
+              <dd>{data.collectionsRead || t('unknown')}</dd>
+            </div>
+            <div>
+              <dt>{t('firstPublished')}</dt>
+              <dd>{date(data.firstPublished)}</dd>
+            </div>
+            <div>
+              <dt>{t('latestPublished')}</dt>
+              <dd>{date(data.latestPublished)}</dd>
+            </div>
+            <div>
+              <dt>{t('currency')}</dt>
+              <dd>{data.currency || t('unknown')}</dd>
+            </div>
+            <div>
+              <dt>{t('country')}</dt>
+              <dd>{data.country || t('unknown')}</dd>
+            </div>
+            <div>
+              <dt>{t('language')}</dt>
+              <dd>{data.language || t('unknown')}</dd>
+            </div>
+            <div>
+              <dt>{t('platform')}</dt>
+              <dd>{data.shopify ? 'Shopify' : t('unknown')}</dd>
+            </div>
+            <div>
+              <dt>{t('lowestPrice')}</dt>
+              <dd className="price-low">{price(data.lowestPrice)}</dd>
+            </div>
+            <div>
+              <dt>{t('averagePrice')}</dt>
+              <dd className="price-mid">{price(data.averagePrice)}</dd>
+            </div>
+            <div>
+              <dt>{t('highestPrice')}</dt>
+              <dd className="price-high">{price(data.highestPrice)}</dd>
+            </div>
           </dl>
+          <div className="website-card website-tech-card">
+            <div className="website-tech-heading">
+              <span aria-hidden="true">⌘</span>
+              <div>
+                <h2>{t('technologies')}</h2>
+                <p>
+                  {data.pixels.length} {t('pixels')} · {data.apps.length} {t('apps')}
+                </p>
+              </div>
+            </div>
+            {data.pixels.length || data.apps.length ? (
+              <div className="website-tech-list">
+                {[...data.pixels, ...data.apps].map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
+              </div>
+            ) : (
+              <p className="website-note">{t('noTechnology')}</p>
+            )}
+          </div>
           <p className="website-note">{t('note')}</p>
           {savedAt !== null && (
             <p className="website-note">

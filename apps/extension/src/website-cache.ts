@@ -16,6 +16,16 @@ const entrySchema = z.object({
     currency: z.string().max(250),
     country: z.string().max(250),
     language: z.string().max(250),
+    productsRead: z.number().int().nonnegative().catch(0),
+    collectionsRead: z.number().int().nonnegative().catch(0),
+    firstPublished: z.string().max(250).catch(''),
+    latestPublished: z.string().max(250).catch(''),
+    lowestPrice: z.number().nullable().catch(null),
+    averagePrice: z.number().nullable().catch(null),
+    highestPrice: z.number().nullable().catch(null),
+    pixels: z.array(z.string().max(80)).max(20).catch([]),
+    apps: z.array(z.string().max(80)).max(20).catch([]),
+    metaAdsUrl: z.url().catch('https://www.facebook.com/ads/library/'),
   }),
 });
 export function cachedOverview(value: unknown, url: string, now = Date.now()) {
