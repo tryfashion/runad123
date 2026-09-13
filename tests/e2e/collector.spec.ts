@@ -44,7 +44,7 @@ test('isolated collector extracts only product data and currency from fixture st
   await page.goto(
     'https://fixture.example/fr/products/runad123-probe-trail-mug?variant=9007199254740995',
   );
-  const result = collected(await page.evaluate(collectPage));
+  const result = collected(await page.evaluate(collectPage, 'product' as const));
   expect(JSON.stringify(result)).not.toContain('cart-private-marker');
   const product = normalizeShopify(result.raw!, {
     pageUrl: result.pageUrl!,
@@ -74,9 +74,9 @@ test('collector detects currency changes and refuses unverified JSON fallback', 
     });
   });
   await page.goto('https://fixture.example/products/runad123-probe-trail-mug');
-  expect((await page.evaluate(collectPage)).error).toBe('CURRENCY_CHANGED');
+  expect((await page.evaluate(collectPage, 'product' as const)).error).toBe('CURRENCY_CHANGED');
   change = false;
-  const result = collected(await page.evaluate(collectPage));
+  const result = collected(await page.evaluate(collectPage, 'product' as const));
   expect(result.method).toBe('product_json');
   expect(() =>
     normalizeShopify(result.raw!, {

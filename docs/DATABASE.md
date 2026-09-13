@@ -40,7 +40,7 @@ M1 身份事务统一先锁 settings.access_mode 行，序列化安装、验证�
 
 ### member_accounts 注册审核（迁移 0009）
 
-- 注册申请仅创建 pending 行，purpose 为 5–500 字符；密码至少 8 字符，独立随机盐及 scrypt-v1 哈希，不保存明文。email_normalized 最长 254，review_note 最长 500。
+- 注册申请仅创建 pending 行，purpose 未提供时为空字符串，提供时为 5–500 字符；密码至少 8 字符，独立随机盐及 scrypt-v1 哈希，不保存明文。email_normalized 最长 254，review_note 最长 500。
 - state 只允许 pending/approved/rejected。CHECK：approved 必须有 user_id，其余状态必须为空；pending 的 reviewer_id/reviewed_at 必须为空，其余状态均非空。
 - 批准时在同一身份锁事务内确认 pending、检查已有邮箱冲突、创建 active 普通 user、填审核人/时间并写 member.review 审计；拒绝不创建 user。并发审核只允许一个成功，其余冲突。唯一邮箱约束防止并发重复申请。
 - 未验证邮箱不自动关联旧账号。新密码登录重新核验 user active；密码验证成功前不泄露审批状态。数据列表不返回盐、哈希；审核备注仅管理员可见。

@@ -23,6 +23,20 @@ async function setup() {
   return { ...f, auth, store, members: new MemberService(auth) };
 }
 describe('reviewed password registration without SMTP', () => {
+  it('accepts omitted purpose without bypassing review and validates supplied purpose', async () => {
+    const f = await setup();
+    const { purpose: _purpose, ...minimal } = input();
+    await f.members.register(minimal, 'ip');
+    expect(f.store.rows.members[0]?.purpose).toBe('');
+    expect(f.store.rows.members[0]?.state).toBe('pending');
+    await expect(
+      f.members.login({ email: minimal.email, password: minimal.password }, 'web', 'ip'),
+    ).rejects.toMatchObject({ code: 'REGISTRATION_PENDING' });
+    await expect(
+      f.members.register({ ...input('invalid@example.com'), purpose: 'x' }, 'ip'),
+    ).rejects.toThrow();
+  });
+
   it('creates no user/session before approval, then permits login and revokes anonymous token', async () => {
     const f = await setup(),
       a = await f.install();

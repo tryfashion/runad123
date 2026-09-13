@@ -107,8 +107,9 @@ M2 错误：PRODUCT_INCOMPLETE、CURRENCY_UNVERIFIED/CURRENCY_CHANGED、SOURCE_C
 
 本机运维预览：start-frontend.bat 只在服务就绪后打开 /admin/login，不再调用本地免登录桥或签发临时管理员会话。管理员用 admin:bootstrap 写入的 ADMIN_EMAIL/ADMIN_PASSWORD 登录，仍走标准 web cookie、CSRF、管理员 API 校验和审计。LOCAL_PREVIEW_ENABLED=true 仅保留本地调试保护：禁用 BAT 管理进程中的 DeepSeek 密钥，并在严格回环条件下接受 Chrome 自动分配的开发扩展 ID。
 
-插件首次使用交互：产品首页不显示账号表单、不自动创建安装身份；采集按钮仅做本地预览。创建草稿按钮旁显示上传、文本检查及采集/导出统计用途，用户点击该按钮后，无有效会话时调用安装接口（同意当前 consentVersion），再提交采集。安装接口和采集接口的认证、同意字段及登录开关不变；强制登录时显示账号入口，账号表单位于独立视图。切换教程/账号视图保持当前商品和未保存编辑。
+插件首次使用交互：产品目录与本地 CSV 下载不自动创建安装身份，不上传商品到自家服务器，也不要求账号登录。旧产品预览、创建草稿及草稿恢复编辑入口均已移除，历史 lastDraft/draftEdits 不再参与产品页渲染。服务端 captures/drafts 的认证、同意字段及登录开关保留，后续重新开放提交入口时仍须明确告知上传用途。
 
+本地目录消息（非 HTTP）：catalog 接收当前 tabId、page（1–201）、collection handle 和 products/collections 类别，只从当前已授权店铺同源读取。商品每页5条，系列每页50条，响应2 MiB/15秒限额；返回卡片 handle/title/vendor/type/image/price/created/url，金额为十进制字符串，外部商品ID不进入目录模型。collectSelected 只接受1–10个 handle，复用采集器的30秒、币种前后核验、来源页面核验和商品规范化；任一失败阻止本次批量下载。downloadCollectionCsv 支持1–1000个规范商品，全店/系列在插件端分页枚举后分批采集，文件超限不截断。卡片创建日期使用公开 created_at，不视为真实上架日期或销量证明；未读取范围不参与搜索排序。所有消息沿用固定扩展页面来源检查。
 M1 传输细节：网站生产 cookie 名为 __Host-runad-session / __Host-runad-preauth，Secure、HttpOnly、SameSite=Lax、Path=/；本地开发使用非 __Host 名称且允许 HTTP。网站写请求校验精确 WEB_ORIGIN 与绑定 cookie 的 CSRF；旧网站会话过期不妨碍重新申请密码登录。插件使用构建时精确 API origin、credentials=omit、禁止重定向，后台只接受本插件 sidepanel.html 发出的固定动作，不接受 URL/令牌参数。正式环境服务器只为 CHROME_EXTENSION_IDS 中的来源返回 CORS；本地 LOCAL_PREVIEW_ENABLED=true、非 production、WEB_ORIGIN 为 http://127.0.0.1:3000、请求地址为该回环地址或 Next.js 内部 localhost:3000，且存在 Host 时必须为 127.0.0.1:3000 时，额外接受合法的 chrome-extension://<32位a-p字符> 来源，无需固定开发 ID；会话/权限校验不变。服务器，不接收网页提交的安装 ID。安装令牌只返回一次，无法凭安装 ID 恢复。
 
 当前注册限速：IP 每小时 5、邮箱每小时 3、全站每小时 100；密码登录 IP 每分钟 20、邮箱每分钟 5；安装 IP 每小时 20、续期每 token 每分钟 10。MySQL 原子桶按实际请求计数，重复申请同样扣次数。未配置可信代理 IP 头时共用保守桶；生产代理必须覆盖该头并禁止直连应用端口。遗留邮件服务方法仅保留内部测试/历史兼容，公网端点已关闭。
@@ -294,13 +295,14 @@ Blob 属于 offscreen 文档，service worker 保存 permitId/downloadId/主体/
 
 | API | 权限 | 输入与结果 |
 | --- | --- | --- |
-| POST /auth/registration | 网站 Origin＋CSRF；插件有效安装 Bearer；限速 | {email,password,confirmPassword,purpose,consentAccepted:true} → 202 {submitted:true}；不返回用户或令牌 |
+| POST /auth/registration | 网站 Origin＋CSRF；插件有效安装 Bearer；限速 | {email,password,confirmPassword,purpose?,consentAccepted:true} → 202 {submitted:true}；不返回用户或令牌 |
 | POST /auth/password/login | 网站 Origin＋CSRF 或插件安装 Bearer；限速 | {email,password} → 网站 {user,expiresAt}＋HttpOnly Cookie；插件 {token,installationId,expiresAt,user} |
 | GET /admin/members | 管理员 web 会话 | state=pending/approved/rejected 默认 pending，cursor 可选 UUID → {items,nextCursor}，每页 50 |
 | PATCH /admin/members/:id/review | 管理员 web 会话＋CSRF | {decision:approved/rejected,note?:string} → {state}；仅 pending 可转移，已处理返回 REVISION_CONFLICT/409 |
 
 - 请求严格 schema。email 去首尾空格、小写、合法邮箱格式且最长 254；密码原样 8–256 字符、两次完全一致；用途去首尾空格后 5–500 字符，备注最长 500。登录密码 1–256；公开请求不能传 userId、role、state。错误 INVALID_INPUT，不返回密码或字段原值。
 - 注册遇到已有 users/member_accounts 邮箱统一返回 submitted，不修改账号或原密码。pending 不创建 users、无会话；批准时原子创建 active 普通用户、绑定账号、写 reviewerId/时间及 member.review 审计。批准碰到已有用户邮箱返回 MEMBER_ACCOUNT_EXISTS/409，绝不按未验证邮箱自动绑定既有账号。
+- 注册用途 purpose 可省略，未填写保存为空字符串；提供时仍校验 5–500 字符。网站环境变量 REGISTRATION_PURPOSE_ENABLED=true 可恢复用途输入，默认隐藏。注册页不显示审核引导和未验证说明，后台 pending/人工审核及登录限制不变，不发送验证邮件。
 - 列表仅 {id,email,purpose,state,createdAt,reviewedAt,note,emailVerified:false}，不含密码材料。备注为管理员内部信息。UUID 游标按 id 排序，不保证申请时间顺序；刷新返回第一页。
 - 密码错误/不存在返回 MEMBER_LOGIN_FAILED/401；只有密码正确才显示 REGISTRATION_PENDING/403 或 REGISTRATION_REJECTED/403。停用/失效用户不得登录；审核通过仍须用户主动登录。本版无审核通知、自助重提或密码找回。
 - 密码加盐 scrypt，与内部管理员相同版本；昂贵哈希在身份锁外计算，签发会话事务重新核验密码材料和状态，防止并发变更。插件登录撤销携带的旧会话，不自动关联匿名历史。原有管理员使用独立 /auth/admin/login。

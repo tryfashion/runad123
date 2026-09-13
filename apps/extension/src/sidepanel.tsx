@@ -1,3 +1,4 @@
+import { ToolsPanel } from './tools-panel';
 import { WebsitePanel } from './website-panel';
 import { overviewText } from './website-overview';
 import { useEffect, useState } from 'react';
@@ -60,17 +61,27 @@ function Panel({ initialPreference }: { initialPreference: UiPreference }) {
     <div className="panel">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-icon" aria-hidden="true">
-            r
-          </span>
+          <img className="brand-icon" src="./icons/icon.svg" alt="" />
           <div>
             <strong>runad123</strong>
             <span className="brand-subtitle">{ui('subtitle')}</span>
           </div>
         </div>
         <div className="header-actions">
-          <label className="language-picker">
-            <span aria-hidden="true">◎</span>
+          <label className="language-picker" title={t('language')}>
+            <svg
+              aria-hidden="true"
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <ellipse cx="12" cy="12" rx="4" ry="9" />
+              <path d="M3 12h18M5 6.5h14M5 17.5h14" />
+            </svg>
             <select
               aria-label={t('language')}
               value={preference}
@@ -98,23 +109,19 @@ function Panel({ initialPreference }: { initialPreference: UiPreference }) {
         <button aria-pressed={view === 'product'} onClick={() => setView('product')}>
           {ui('products')}
         </button>
+        <button aria-pressed={view === 'tools'} onClick={() => setView('tools')}>
+          {ui('tools')}
+        </button>
         <button aria-pressed={view === 'overview'} onClick={() => setView('overview')}>
           {overviewText(locale, 'tab')}
         </button>
         <button aria-pressed={view === 'tutorials'} onClick={() => setView('tutorials')}>
           {ui('tutorials')}
         </button>
-        <button aria-pressed={view === 'tools'} onClick={() => setView('tools')}>
-          {ui('tools')}
-        </button>
       </nav>
       <main>
         <div hidden={view !== 'product'}>
-          <div className="section-heading">
-            <h1>{ui('current')}</h1>
-            <span>{ui('flow')}</span>
-          </div>
-          <ProductPanel locale={locale} onAccount={() => setView('account')} />
+          <ProductPanel locale={locale} />
           <button className="guide-link" onClick={() => setView('tutorials')}>
             <span className="guide-icon" aria-hidden="true">
               ↗
@@ -130,7 +137,7 @@ function Panel({ initialPreference }: { initialPreference: UiPreference }) {
           <WebsitePanel locale={locale} onAccount={() => setView('account')} />
         )}
         {view === 'tutorials' && <TutorialPanel locale={locale} />}
-        {view === 'tools' && <section className="tools-panel" aria-label={ui('tools')} />}
+        {view === 'tools' && <ToolsPanel locale={locale} />}
         {view === 'account' && (
           <>
             <button className="back-link" onClick={() => setView('product')}>

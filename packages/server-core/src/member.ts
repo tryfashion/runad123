@@ -43,7 +43,7 @@ export class MemberService {
         passwordSalt: password.salt,
         passwordHash: password.hash,
         passwordVersion: password.version,
-        purpose: input.purpose,
+        purpose: input.purpose ?? '',
         state: 'pending',
         userId: null,
         reviewerId: null,

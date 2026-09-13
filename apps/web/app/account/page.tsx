@@ -13,5 +13,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ l
     params.lang,
     parseAcceptLanguage(header.get('accept-language')),
   );
-  return <RegistrationPage extension="" flow="" locale={locale} />;
+  return (
+    <RegistrationPage
+      showPurpose={process.env.REGISTRATION_PURPOSE_ENABLED === 'true'}
+      extension=""
+      flow=""
+      locale={locale}
+    />
+  );
 }

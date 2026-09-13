@@ -1,0 +1,88 @@
+body {
+  margin: 0;
+  width: 320px;
+  font:
+    13px/1.6 'Segoe UI',
+    'Microsoft YaHei',
+    sans-serif;
+  color: #142c43;
+  background: white;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e1e7ef;
+}
+.logo {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: #2563eb;
+  color: white;
+  font-size: 23px;
+}
+section {
+  padding: 24px 22px;
+  text-align: center;
+}
+.wait-icon {
+  margin: auto;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  background: #edf7f2;
+  color: #176f59;
+  border-radius: 10px;
+  font-size: 28px;
+}
+h1 {
+  font-size: 14px;
+  margin: 12px 0 4px;
+}
+p {
+  margin: 0;
+  color: #74849b;
+  font-size: 12px;
+}
+.progress {
+  margin-top: 20px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #edf1f6;
+}
+.progress span {
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: #218368;
+  animation: loading 1.3s infinite ease-in-out;
+}
+@keyframes loading {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress span {
+    animation: none;
+    width: 100%;
+  }
+}
+button {
+  margin-top: 16px;
+  padding: 7px 24px;
+  border: 0;
+  border-radius: 6px;
+  background: #176f59;
+  color: white;
+  cursor: pointer;
+}

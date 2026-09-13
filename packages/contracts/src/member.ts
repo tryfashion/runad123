@@ -9,7 +9,7 @@ export const memberRegistrationInput = z
     email,
     password: z.string().min(8).max(256),
     confirmPassword: z.string().min(8).max(256),
-    purpose: z.string().trim().min(5).max(500),
+    purpose: z.string().trim().min(5).max(500).optional(),
     consentAccepted: z.literal(true),
   })
   .refine((value) => value.password === value.confirmPassword, {

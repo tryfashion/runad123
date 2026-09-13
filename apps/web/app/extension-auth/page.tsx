@@ -9,6 +9,7 @@ export default async function Page({
   const params = await searchParams;
   return (
     <RegistrationPage
+      showPurpose={process.env.REGISTRATION_PURPOSE_ENABLED === 'true'}
       extension={typeof params.extension === 'string' ? params.extension : ''}
       flow={typeof params.flow === 'string' ? params.flow : ''}
       locale={uiLocaleSchema.catch('zh-Hans').parse(params.lang)}

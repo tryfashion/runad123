@@ -10,9 +10,22 @@ import {
   type PreparedRevision,
 } from '@runad123/contracts/product';
 import { canonicalProductUrl, normalizeShopify, productsCsv } from '@runad123/product-core';
-import { collectCollectionPage, collectPage } from './collect-page';
+import { collectPage } from './collect-page';
+import { readCatalog } from './catalog-page';
 declare const __RUNAD_API_ORIGIN__: string;
 const messages = z.discriminatedUnion('action', [
+  z.strictObject({
+    action: z.literal('catalog'),
+    tabId: z.number().int().nonnegative(),
+    page: z.number().int().min(1).max(201),
+    collection: z.string().max(255),
+    kind: z.enum(['products', 'collections']),
+  }),
+  z.strictObject({
+    action: z.literal('collectSelected'),
+    tabId: z.number().int().nonnegative(),
+    handles: z.array(z.string().min(1).max(255)).min(1).max(10),
+  }),
   z.strictObject({
     action: z.literal('rewriteStart'),
     draftId: z.uuid(),
@@ -35,7 +48,7 @@ const messages = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('collectCollection'), tabId: z.number().int().nonnegative() }),
   z.strictObject({
     action: z.literal('downloadCollectionCsv'),
-    products: z.array(captureInput.shape.product).min(1).max(50),
+    products: z.array(captureInput.shape.product).min(1).max(1000),
   }),
   z.strictObject({ action: z.literal('cancelCollect'), tabId: z.number().int().nonnegative() }),
   z.strictObject({ action: z.literal('capture'), input: captureInput, key: z.uuid() }),
@@ -114,6 +127,7 @@ async function dispatch(raw: unknown) {
   if (m.action === 'cancelCollect') {
     await chrome.scripting.executeScript({
       target: { tabId: m.tabId },
+      injectImmediately: true,
       func: () => {
         (
           globalThis as typeof globalThis & { runadCollector?: AbortController }
@@ -130,6 +144,7 @@ async function dispatch(raw: unknown) {
       throw new Error('SITE_PERMISSION_REQUIRED');
     const results = await chrome.scripting.executeScript({
       target: { tabId: m.tabId },
+      injectImmediately: true,
       func: collectPage,
     });
     const result = results[0]?.result;
@@ -139,6 +154,36 @@ async function dispatch(raw: unknown) {
       throw new Error('SOURCE_CHANGED');
     return { product: normalizeCollected(result) };
   }
+  if (m.action === 'catalog' || m.action === 'collectSelected') {
+    const tab = await chrome.tabs.get(m.tabId);
+    if (!tab.url || !tab.active) throw Error('SOURCE_CHANGED');
+    if (!(await chrome.permissions.contains({ origins: [new URL(tab.url).origin + '/*'] })))
+      throw Error('SITE_PERMISSION_REQUIRED');
+    if (m.action === 'catalog') {
+      const [output] = await chrome.scripting.executeScript({
+        target: { tabId: m.tabId },
+        injectImmediately: true,
+        func: readCatalog,
+        args: [{ page: m.page, collection: m.collection, kind: m.kind }],
+      });
+      if (!output?.result || output.result.error)
+        throw Error(output?.result?.error ?? 'SOURCE_UNAVAILABLE');
+      return output.result;
+    }
+    const [output] = await chrome.scripting.executeScript({
+      target: { tabId: m.tabId },
+      injectImmediately: true,
+      func: collectPage,
+      args: ['collection', m.handles],
+    });
+    if (!output?.result || output.result.error)
+      throw Error(output?.result?.error ?? 'SOURCE_UNAVAILABLE');
+    if (output.result.failed || output.result.products?.length !== m.handles.length)
+      throw Error('SOURCE_UNAVAILABLE');
+    const current = await chrome.tabs.get(m.tabId);
+    if (current.url !== tab.url || !current.active) throw Error('SOURCE_CHANGED');
+    return { products: output.result.products.map(normalizeCollected) };
+  }
   if (m.action === 'collectCollection') {
     const tab = await chrome.tabs.get(m.tabId);
     if (!tab.url || !tab.active) throw new Error('SOURCE_CHANGED');
@@ -146,7 +191,9 @@ async function dispatch(raw: unknown) {
       throw new Error('SITE_PERMISSION_REQUIRED');
     const results = await chrome.scripting.executeScript({
       target: { tabId: m.tabId },
-      func: collectCollectionPage,
+      injectImmediately: true,
+      func: collectPage,
+      args: ['collection'],
     });
     const result = results[0]?.result;
     if (!result || result.error) throw new Error(result?.error ?? 'SOURCE_UNAVAILABLE');
@@ -158,7 +205,7 @@ async function dispatch(raw: unknown) {
     };
   }
   if (m.action === 'downloadCollectionCsv') {
-    if (m.products.length > 50) throw new Error('PRODUCT_INCOMPLETE');
+    if (m.products.length > 1000) throw new Error('PRODUCT_INCOMPLETE');
     const id = crypto.randomUUID();
     await ensureOffscreenDocument();
     const csv = productsCsv(m.products.map(localRevision));
@@ -166,9 +213,21 @@ async function dispatch(raw: unknown) {
     if (typeof blob?.url !== 'string' || !blob.url.startsWith('blob:' + chrome.runtime.getURL('')))
       throw new Error('DOWNLOAD_FAILED');
     const first = m.products[0]!;
+    const name =
+      first.title
+        .normalize('NFKC')
+        .replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, '_')
+        .replace(/\s+/g, ' ')
+        .slice(0, 100)
+        .replace(/[. ]+$/g, '')
+        .trim() || 'untitled';
+    const filename =
+      m.products.length === 1
+        ? 'runad123/product-' + name + '.csv'
+        : 'runad123/collection-' + first.source.storeHost + '-' + Date.now() + '.csv';
     await chrome.downloads.download({
       url: blob.url,
-      filename: `runad123/collection-${first.source.storeHost}-${Date.now()}.csv`,
+      filename,
       saveAs: false,
       conflictAction: 'uniquify',
     });

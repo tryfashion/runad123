@@ -44,6 +44,7 @@ export default defineConfig(({ mode }) => {
       sourcemap: mode === 'development',
       rolldownOptions: {
         input: {
+          launcher: resolve(import.meta.dirname, 'launcher.html'),
           offscreen: resolve(import.meta.dirname, 'offscreen.html'),
           sidepanel: resolve(import.meta.dirname, 'sidepanel.html'),
           background: resolve(import.meta.dirname, 'src/background.ts'),

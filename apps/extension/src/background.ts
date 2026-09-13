@@ -108,15 +108,36 @@ async function initialize() {
   await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
 }
 
-chrome.action.onClicked.addListener((tab) => {
-  if (tab.id === undefined || !tab.url || !/^https?:/.test(tab.url)) return;
-  void chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: toggleInjectedDrawer,
-    args: [chrome.runtime.getURL('sidepanel.html')],
-  });
+chrome.runtime.onMessage.addListener((message, sender, respond) => {
+  if (
+    sender.id !== chrome.runtime.id ||
+    sender.url !== chrome.runtime.getURL('launcher.html') ||
+    message?.action !== 'openDrawerWhenReady'
+  )
+    return false;
+  void (async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id === undefined || !tab.url || !/^https?:/.test(tab.url)) return { status: 'error' };
+    const [ready] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      injectImmediately: true,
+      func: () => document.readyState !== 'loading' && Boolean(document.body),
+    });
+    if (!ready?.result) return { status: 'loading' };
+    const current = await chrome.tabs.get(tab.id);
+    if (!current.active || current.url !== tab.url) return { status: 'loading' };
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      injectImmediately: true,
+      func: toggleInjectedDrawer,
+      args: [chrome.runtime.getURL('sidepanel.html')],
+    });
+    return { status: 'opened' };
+  })()
+    .then(respond)
+    .catch(() => respond({ status: 'error' }));
+  return true;
 });
-
 // Register synchronously so service worker restarts retain listeners.
 chrome.runtime.onInstalled.addListener(() => {
   void initialize();

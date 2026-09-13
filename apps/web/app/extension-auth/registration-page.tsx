@@ -20,10 +20,12 @@ export function RegistrationPage({
   extension,
   flow,
   locale,
+  showPurpose = false,
 }: {
   extension: string;
   flow: string;
   locale: UiLocale;
+  showPurpose?: boolean;
 }) {
   const standalone = !extension && !flow;
   const t = (key: Parameters<typeof memberText>[1]) => memberText(locale, key);
@@ -160,7 +162,13 @@ export function RegistrationPage({
         ...(mode === 'login' ? { consentAccepted: true } : {}),
         input:
           mode === 'register'
-            ? { email, password, confirmPassword: confirm, purpose, consentAccepted: consent }
+            ? {
+                email,
+                password,
+                confirmPassword: confirm,
+                ...(showPurpose ? { purpose } : {}),
+                consentAccepted: consent,
+              }
             : { email, password },
       });
       if (mode === 'register') {
@@ -196,30 +204,22 @@ export function RegistrationPage({
             {success ? '✓' : '◷'}
           </div>
         )}
-        <h1>
-          {t(
-            success
-              ? 'success'
-              : submitted
-                ? 'submitted'
-                : mode === 'register'
-                  ? 'title'
-                  : 'loginTitle',
-          )}
-        </h1>
-        <p className={styles.subtitle}>
-          {t(
-            success
-              ? standalone
-                ? 'loginSubtitle'
-                : 'returning'
-              : submitted
-                ? 'pendingHint'
-                : mode === 'register'
-                  ? 'subtitle'
-                  : 'loginSubtitle',
-          )}
-        </p>
+        {(success || submitted || mode === 'login') && (
+          <>
+            <h1>{t(success ? 'success' : submitted ? 'submitted' : 'loginTitle')}</h1>
+            <p className={styles.subtitle}>
+              {t(
+                success
+                  ? standalone
+                    ? 'loginSubtitle'
+                    : 'returning'
+                  : submitted
+                    ? 'pendingHint'
+                    : 'loginSubtitle',
+              )}
+            </p>
+          </>
+        )}
         {success ? (
           standalone ? (
             <AccountCard
@@ -310,19 +310,21 @@ export function RegistrationPage({
                       disabled={busy}
                     />
                   </label>
-                  <label className={styles.field}>
-                    {t('purpose')}
-                    <textarea
-                      required
-                      minLength={5}
-                      maxLength={500}
-                      rows={2}
-                      placeholder={t('purposeHint')}
-                      value={purpose}
-                      onChange={(e) => setPurpose(e.target.value)}
-                      disabled={busy}
-                    />
-                  </label>
+                  {showPurpose && (
+                    <label className={styles.field}>
+                      {t('purpose')}
+                      <textarea
+                        required
+                        minLength={5}
+                        maxLength={500}
+                        rows={2}
+                        placeholder={t('purposeHint')}
+                        value={purpose}
+                        onChange={(e) => setPurpose(e.target.value)}
+                        disabled={busy}
+                      />
+                    </label>
+                  )}
                 </>
               )}
               <label className={styles.check}>
@@ -346,7 +348,6 @@ export function RegistrationPage({
                 {busy ? '…' : t(mode === 'register' ? 'submit' : 'login')}
                 {seconds > 0 ? ' (' + seconds + 's)' : ''}
               </button>
-              <p className={styles.hint}>{t('note')}</p>
             </form>
           </>
         )}

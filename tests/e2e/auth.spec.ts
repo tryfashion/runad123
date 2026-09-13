@@ -50,14 +50,12 @@ test('reviewed password website login with simulated database, real cookie/CSRF 
     });
   });
   await page.goto('/account?lang=en');
-  await page.getByLabel('Email / login', { exact: true }).fill('browser@example.com');
+  await page.getByLabel('Email', { exact: true }).fill('browser@example.com');
   await page.getByLabel('Password', { exact: true }).fill('Synthetic-pass-42');
   await page.getByLabel('Confirm password', { exact: true }).fill('Synthetic-pass-42');
-  await page
-    .getByLabel('How will you use runad123?', { exact: true })
-    .fill('Product research for my shop');
+  await expect(page.locator('textarea')).toHaveCount(0);
   await page.getByRole('checkbox').check();
-  await page.getByRole('button', { name: 'Submit for review', exact: true }).click();
+  await page.getByRole('button', { name: 'Register', exact: true }).last().click();
   await expect(page.getByRole('heading', { name: 'Application submitted' })).toBeVisible();
   await members.review(
     store.rows.members[0]!.id,
@@ -74,7 +72,7 @@ test('reviewed password website login with simulated database, real cookie/CSRF 
   await page.reload();
   await expect(page.getByText('browser@example.com', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByLabel('Email / login', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
   expect(store.rows.sessions.at(-1)!.revokedAt !== null).toBe(true);
   await page.setViewportSize({ width: 375, height: 812 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
