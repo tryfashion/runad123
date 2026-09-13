@@ -43,6 +43,7 @@ import {
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons';
+import { MemberReviewCard } from './member-review-card';
 import { ThemeLinksCard } from './theme-links-card';
 import { adminApi, ApiFailure } from './admin-api';
 import { adminText, adminDictionaries } from '@runad123/contracts/admin-i18n';
@@ -445,17 +446,20 @@ export function AdminSystem({
       );
     if (section === 'accounts')
       return (
-        <Accounts
-          locale={locale}
-          users={users}
-          installations={installations}
-          changeStatus={(userId, status) =>
-            run(async () => {
-              await adminApi('/admin/users/' + userId + '/status', { status }, 'PATCH');
-              await loadSection('accounts');
-            })
-          }
-        />
+        <>
+          <MemberReviewCard locale={locale} onReviewed={() => loadSection('accounts')} />
+          <Accounts
+            locale={locale}
+            users={users}
+            installations={installations}
+            changeStatus={(userId, status) =>
+              run(async () => {
+                await adminApi('/admin/users/' + userId + '/status', { status }, 'PATCH');
+                await loadSection('accounts');
+              })
+            }
+          />
+        </>
       );
     if (section === 'admins')
       return (

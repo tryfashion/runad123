@@ -1,62 +1,20 @@
+import { DomainRegistrationCard } from './domain-registration-card';
 import { ThemeAffiliate } from './theme-affiliate';
 import { cachedOverview, overviewCacheKey, saveOverview } from './website-cache';
 import { useEffect, useRef, useState } from 'react';
 import type { UiLocale } from '@runad123/contracts/i18n';
 import { readWebsite, overviewText, type WebsiteOverview } from './website-overview';
 
-async function enrichDomainRegistration(data: WebsiteOverview): Promise<WebsiteOverview> {
-  const parseDate = (value: unknown) => (typeof value === 'string' ? value : '');
-  const parseRegistrar = (value: unknown) => {
-    if (!Array.isArray(value)) return '';
-    for (const entity of value) {
-      const roles = (entity as { roles?: unknown }).roles;
-      if (!Array.isArray(roles) || !roles.includes('registrar')) continue;
-      const vcard = (entity as { vcardArray?: unknown }).vcardArray;
-      const rows = Array.isArray(vcard) && Array.isArray(vcard[1]) ? vcard[1] : [];
-      for (const row of rows) {
-        if (Array.isArray(row) && row[0] === 'fn' && typeof row[3] === 'string') return row[3];
-      }
-    }
-    return '';
-  };
-  try {
-    const response = await fetch('https://rdap.org/domain/' + encodeURIComponent(data.host), {
-      credentials: 'omit',
-      cache: 'no-store',
-      redirect: 'error',
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!response.ok) return data;
-    const body = (await response.json()) as { events?: unknown; entities?: unknown };
-    const events = Array.isArray(body.events) ? body.events : [];
-    const eventDate = (actions: string[]) =>
-      parseDate(
-        events.find(
-          (event) =>
-            typeof (event as { eventAction?: unknown }).eventAction === 'string' &&
-            actions.includes((event as { eventAction: string }).eventAction.toLowerCase()),
-        )?.eventDate,
-      );
-    return {
-      ...data,
-      domainCreated: eventDate(['registration', 'registered']),
-      domainExpires: eventDate(['expiration', 'expiry', 'expires']),
-      registrar: parseRegistrar(body.entities),
-    };
-  } catch {
-    return data;
-  }
-}
-
-export function WebsitePanel({ locale }: { locale: UiLocale }) {
+export function WebsitePanel({ locale, onAccount }: { locale: UiLocale; onAccount: () => void }) {
   const t = (key: Parameters<typeof overviewText>[1]) => overviewText(locale, key);
   const [data, setData] = useState<WebsiteOverview | null>(null);
   const [busy, setBusy] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<'permission' | 'unavailable' | null>(null);
   const generation = useRef(0);
+  const sourceTab = useRef<{ id: number; windowId: number } | null>(null);
   const date = (value: string) =>
-    value
+    value && Number.isFinite(Date.parse(value))
       ? new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'zh-CN', {
           month: 'short',
           day: '2-digit',
@@ -83,6 +41,7 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab?.id === undefined || !tab.url || !/^https?:\/\//.test(tab.url))
           throw Error('unavailable');
+        sourceTab.current = { id: tab.id, windowId: tab.windowId };
         const key = overviewCacheKey(tab.url);
         const stored = await chrome.storage.local.get(key);
         const cached = cachedOverview(stored[key], tab.url);
@@ -114,7 +73,9 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
         if (!result || !current.active || current.url !== tab.url || result.pageUrl !== tab.url)
           throw Error('unavailable');
         if (version !== generation.current) throw Error('unavailable');
-        const enriched = await enrichDomainRegistration(result);
+        setData(result);
+        const enriched = { ...result, domainCreated: '', domainExpires: '', registrar: '' };
+        if (version !== generation.current) throw Error('unavailable');
         const updatedAt = await saveOverview(enriched);
         if (version === generation.current) setSavedAt(updatedAt);
         return enriched;
@@ -142,14 +103,17 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
       setBusy(false);
       setError('unavailable');
     };
-    const updated = (_: number, info: chrome.tabs.OnUpdatedInfo) => {
-      if (info.url) invalidate();
+    const updated = (id: number, info: chrome.tabs.OnUpdatedInfo) => {
+      if (id === sourceTab.current?.id && info.url) invalidate();
     };
-    chrome.tabs.onActivated.addListener(invalidate);
+    const activated = (info: chrome.tabs.OnActivatedInfo) => {
+      if (info.windowId === sourceTab.current?.windowId) void load();
+    };
+    chrome.tabs.onActivated.addListener(activated);
     chrome.tabs.onUpdated.addListener(updated);
     return () => {
       generation.current++;
-      chrome.tabs.onActivated.removeListener(invalidate);
+      chrome.tabs.onActivated.removeListener(activated);
       chrome.tabs.onUpdated.removeListener(updated);
     };
   }, []);
@@ -231,19 +195,13 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
               <dt>{t('highestPrice')}</dt>
               <dd className="price-high">{price(data.highestPrice)}</dd>
             </div>
-            <div>
-              <dt>{t('domainCreated')}</dt>
-              <dd>{date(data.domainCreated)}</dd>
-            </div>
-            <div>
-              <dt>{t('domainExpires')}</dt>
-              <dd>{date(data.domainExpires)}</dd>
-            </div>
-            <div>
-              <dt>{t('registrar')}</dt>
-              <dd>{data.registrar || t('unknown')}</dd>
-            </div>
           </dl>
+          <DomainRegistrationCard
+            host={data.host}
+            locale={locale}
+            refreshedAt={savedAt}
+            onAccount={onAccount}
+          />
           <div className="website-card website-tech-card">
             <div className="website-tech-heading">
               <span aria-hidden="true">⌘</span>

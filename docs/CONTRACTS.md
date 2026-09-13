@@ -71,13 +71,17 @@ M2 错误：PRODUCT_INCOMPLETE、CURRENCY_UNVERIFIED/CURRENCY_CHANGED、SOURCE_C
 
 | 方法/路径 | 权限 | 输入/输出与约束 |
 | --- | --- | --- |
+| GET /domain-registration | 已登录账号＋限速 | host → {domainCreated, domainExpires, registrar}；服务端查询注册信息，详见域名注册信息章节 |
 | GET /config | public | accessMode、configVersion、consentVersion、supportedUiLocales、defaultUiLocale、支持的合同版本、公开限制；教程文字与链接统一由 /tutorials 获取 |
 | GET /auth/csrf | web public | 创建/延长 10 分钟 HttpOnly pre-auth cookie，返回绑定网站会话或 pre-auth 的 csrfToken；不返回 cookie 原文 |
 | POST /access/check | session 核心 | 空对象输入 → {allowed:true}；仅验证当前身份与登录开关，不采集、不调用 AI、不授予导出许可 |
 | POST /installations | public＋限速 | { extensionVersion, consentVersion, consentAccepted:true } → installationId、匿名 token、expiresAt；不接受客户端指定旧 ID |
 | POST /sessions/renew | 有效匿名/插件会话 | 延长现有 token 的 expiresAt，返回 {expiresAt}，不返回新 token；重复调用安全，限速且检查安装/账号状态 |
-| POST /auth/email/start | public＋限速 | { email, clientKind, deliveryLocale:UiLocale }；插件须携带安装 token → challengeId、retryAfterSeconds；响应不区分注册与登录；邮件按冻结的 deliveryLocale 模板发送 |
-| POST /auth/email/verify | challenge＋限速 | { challengeId, code, linkInstallationHistory } → 插件 {token,installationId,expiresAt,user} 或网站 {user,expiresAt}＋HttpOnly cookie；插件必须再次证明原安装会话，网页先 GET /auth/csrf；start/verify 均带 X-CSRF-Token 和 Origin，并使用绑定 challenge 的短期 HttpOnly pre-auth cookie；只有验证码/challengeId 不足以关联别人的安装 |
+| POST /auth/email/start、/auth/email/verify | 停用 | 保留安全传输校验后返回 REGISTRATION_REVIEW_REQUIRED/403；不发送邮件、不消费挑战、不签发会话 |
+| POST /auth/registration | 网站CSRF或插件安装会话＋限速 | 提交申请，不签发账号；详见注册审核 API |
+| POST /auth/password/login | 网站CSRF或插件安装会话＋限速 | 审核通过后密码登录；详见注册审核 API |
+| GET /admin/members | admin web | 审核申请分页；详见注册审核 API |
+| PATCH /admin/members/:id/review | admin web＋CSRF | 通过/拒绝并审计；详见注册审核 API |
 | POST /auth/admin/login | web public＋CSRF＋限速 | {login,password} → {user,expiresAt}＋HttpOnly web cookie；只接受 admin_credentials 中的内部管理员账号，密码用 scrypt salt/hash 校验；错误统一 ADMIN_LOGIN_FAILED，不依赖 SMTP，不给插件 Bearer 使用 |
 | POST /auth/logout | session | 撤销当前会话；网站清除 cookie 并返回 {credential:null}；插件返回 {credential:{token,installationId,expiresAt}}。已关联安装建立新匿名上下文；未关联安装在同一安装签发新匿名令牌（旧匿名会话若仍有效，不因未关联登录而撤销） |
 | GET /me | session | {user:{id,email,role}或null,installationId或null,expiresAt,loginRequired,quota}；M1 quota=null，不能显示为无限或零 |
@@ -95,7 +99,7 @@ M2 错误：PRODUCT_INCOMPLETE、CURRENCY_UNVERIFIED/CURRENCY_CHANGED、SOURCE_C
 | GET /admin/overview | admin | 最近 7 天事件、任务/attempt 数量和比例、USD 成本、当日预算占用、心跳、UTC 每日事件；字段见下表 |
 | GET /admin/products/trending | admin | window=24h/7d/30d、metric、cursor；返回指标定义、样本、匿名/账号拆分 |
 | GET /admin/events、/admin/jobs、/admin/users、/admin/installations、/admin/audits | admin | cursor 为上一页末尾 UUID，按 ID 升序，每页 20；仅返回不含正文/令牌/验证码的字段 |
-| GET/PATCH /admin/settings | admin | M1 GET → {accessMode,configVersion,emailConfigured}；PATCH {accessMode,expectedVersion} → {accessMode,configVersion}；仅允许此字段，乐观锁＋审计；开启强制登录须真实 SMTP 适配器的连接检查通过，memory 不可通过 |
+| GET/PATCH /admin/settings | admin | M1 GET → {accessMode,configVersion,emailConfigured}；PATCH {accessMode,expectedVersion} → {accessMode,configVersion}；仅允许此字段，乐观锁＋审计；审核密码登录无需 SMTP；版本冲突与管理员权限仍强制校验 |
 | GET /admin/tutorials；POST /admin/tutorials；PATCH /admin/tutorials/:id | admin | GET 与公开教程相同查询但包含禁用条目；POST 创建，PATCH 必须 expectedVersion；禁用代替直接硬删，记录审计 |
 | GET/PATCH /admin/limits | admin | 额度、共享预算、教程域名白名单；expectedVersion 乐观锁，不开启 AI |
 | POST /me/delete-data | session | 严格输入 {confirm:true}，202 → {id,state}；按已验证主体创建分批删除请求，相同主体 pending 请求复用；保留账号 |
@@ -105,11 +109,11 @@ M2 错误：PRODUCT_INCOMPLETE、CURRENCY_UNVERIFIED/CURRENCY_CHANGED、SOURCE_C
 
 插件首次使用交互：产品首页不显示账号表单、不自动创建安装身份；采集按钮仅做本地预览。创建草稿按钮旁显示上传、文本检查及采集/导出统计用途，用户点击该按钮后，无有效会话时调用安装接口（同意当前 consentVersion），再提交采集。安装接口和采集接口的认证、同意字段及登录开关不变；强制登录时显示账号入口，账号表单位于独立视图。切换教程/账号视图保持当前商品和未保存编辑。
 
-M1 传输细节：网站生产 cookie 名为 __Host-runad-session / __Host-runad-preauth，Secure、HttpOnly、SameSite=Lax、Path=/；本地开发使用非 __Host 名称且允许 HTTP。网站写请求校验精确 WEB_ORIGIN 与绑定 cookie 的 CSRF；旧会话过期不妨碍重新申请邮箱登录。插件使用构建时精确 API origin、credentials=omit、禁止重定向，后台只接受本插件 sidepanel.html 发出的固定动作，不接受 URL/令牌参数。正式环境服务器只为 CHROME_EXTENSION_IDS 中的来源返回 CORS；本地 LOCAL_PREVIEW_ENABLED=true、非 production、WEB_ORIGIN 为 http://127.0.0.1:3000、请求地址为该回环地址或 Next.js 内部 localhost:3000，且存在 Host 时必须为 127.0.0.1:3000 时，额外接受合法的 chrome-extension://<32位a-p字符> 来源，无需固定开发 ID；会话/权限校验不变。服务器，不接收网页提交的安装 ID。安装令牌只返回一次，无法凭安装 ID 恢复。
+M1 传输细节：网站生产 cookie 名为 __Host-runad-session / __Host-runad-preauth，Secure、HttpOnly、SameSite=Lax、Path=/；本地开发使用非 __Host 名称且允许 HTTP。网站写请求校验精确 WEB_ORIGIN 与绑定 cookie 的 CSRF；旧网站会话过期不妨碍重新申请密码登录。插件使用构建时精确 API origin、credentials=omit、禁止重定向，后台只接受本插件 sidepanel.html 发出的固定动作，不接受 URL/令牌参数。正式环境服务器只为 CHROME_EXTENSION_IDS 中的来源返回 CORS；本地 LOCAL_PREVIEW_ENABLED=true、非 production、WEB_ORIGIN 为 http://127.0.0.1:3000、请求地址为该回环地址或 Next.js 内部 localhost:3000，且存在 Host 时必须为 127.0.0.1:3000 时，额外接受合法的 chrome-extension://<32位a-p字符> 来源，无需固定开发 ID；会话/权限校验不变。服务器，不接收网页提交的安装 ID。安装令牌只返回一次，无法凭安装 ID 恢复。
 
-M1 限速为服务端固定初值：安装 IP 每小时 20；邮件发送 IP 每小时 30、邮箱每小时 5、安装每小时 10，邮箱两次发送严格间隔 60 秒；验证 IP 每 10 分钟 60、challenge 每 10 分钟 10、邮箱每 10 分钟 30、安装每 10 分钟 60；challenge 另限制 5 次错误。续期每 token 每分钟 10。所有桶在 MySQL 事务中原子更新。没有配置可信代理 IP 头时使用保守公共桶，不信任任意 X-Forwarded-For；部署时由可信代理覆盖配置的头并禁止直连应用端口。
+当前注册限速：IP 每小时 5、邮箱每小时 3、全站每小时 100；密码登录 IP 每分钟 20、邮箱每分钟 5；安装 IP 每小时 20、续期每 token 每分钟 10。MySQL 原子桶按实际请求计数，重复申请同样扣次数。未配置可信代理 IP 头时共用保守桶；生产代理必须覆盖该头并禁止直连应用端口。遗留邮件服务方法仅保留内部测试/历史兼容，公网端点已关闭。
 
-网站邮箱验证与插件邮箱验证是同一业务服务，但验证成功的凭据交付分开。网站不会在 JSON 返回其 HttpOnly 会话，插件不会依赖网站 cookie；登录接口必须防止 clientKind 被事后切换。
+网站和插件使用同一审核账号与密码登录业务。网站仅交付 HttpOnly 会话 Cookie，不在 JSON 返回令牌；插件以有效安装 Bearer 登录并返回插件凭据，不依赖网站 Cookie。服务端根据传输身份选择会话类型，不接受客户端指定角色、用户 ID 或 clientKind。
 
 验证码验证成功但响应丢失时重新申请验证码登录；不凭已消费验证码重发旧 token。关联历史和创建账号/会话必须处于同一事务，重复登录到同一账号允许恢复访问，不能再次关联给不同账号。
 
@@ -274,3 +278,39 @@ Blob 属于 offscreen 文档，service worker 保存 permitId/downloadId/主体/
 - `PATCH /api/v1/admin/theme-links`：管理员 web 会话及 CSRF，提交完整配置 `{expectedVersion,items}`；返回保存后的配置。每条 `{id:uuid,name,aliases:string[],url,enabled}`，最多 100 条，每条最多 20 个别名，名称/别名 1–250 字符。URL 最多 2048 字符，仅 HTTPS，无账户密码、非默认端口和 fragment，保留查询参数。重名/别名冲突、重复 ID 拒绝为 INVALID_INPUT；版本冲突返回 REVISION_CONFLICT 409；保存生成审计记录。
 - 匹配：名称/别名 NFKC、去首尾空格、连续空白合并、转小写后精确相等。不模糊匹配或自动推断定制主题；不同主题不能配置同一匹配名称。
 - 插件用独立三秒查询，失败不阻塞概览、不改变网站缓存时间。仅当前匹配结果可变为 HTTPS 外链，附推广标识及 rel=sponsored noopener noreferrer；语言切换不重查主题。
+
+
+### 域名注册信息
+
+- `GET /api/v1/domain-registration?host=example.com`：有效账号会话；匿名安装令牌不算登录。无会话、过期、撤销或停用账号返回 SESSION_EXPIRED/401，匿名会话返回 LOGIN_REQUIRED/403。沿用 Origin 和会话类型校验，鉴权先于域名缓存读取。每账号及来源 IP 每分钟各 30 次；未配置可信代理 IP 头时共用限速桶。
+- 请求仅含当前 hostname，最长 253 字符，ASCII/Punycode 域名；小写规范化、移除前缀 www。拒绝 IP、完整 URL、端口、路径及用户信息。不猜测多级公共后缀、不将 myshopify.com 的注册日期冒充店铺成立日期；不可查询的子域名显示未识别。
+- 返回标准信封，data 为 `{domainCreated, domainExpires, registrar}`。日期为 ISO 时间或空字符串，注册商最多 250 字符；不可用字段为空，前端显示未识别。域名年龄按注册日期计算天数，不代表店铺开业时间。
+- 服务端从 IANA RDAP bootstrap 获取对应 TLD 的 HTTPS 注册局端点，不请求用户提交的网站，不跟随跳转；每次外部请求最多 4 秒、响应最多 1 MiB。IANA 目录缓存 24 小时。
+- 服务端进程内缓存最多 1000 个域名：成功 7 天，失败/空结果 5 分钟；同域名并发合并，最多 8 个域名并行。重启丢失缓存，不新增数据库表或迁移，不保证多进程共享缓存。
+- 插件只请求自身 API origin，不申请 rdap.org/IANA/注册局的 host permission；只发送域名及自家 API Bearer 会话，不发送商品内容或完整网页 URL；令牌由扩展后台附加，不返回页面，不转发给注册局。普通网站概览仍按北京时间自然日缓存；域名注册信息独立查询且不持久缓存到插件，每次展示由服务端验证账号后复用服务端缓存。未登录显示可点击的登录入口，账号变更立即清除显示并重新校验；手动刷新复用服务端有效域名缓存。域名查询失败不阻断其他概览数据。
+
+
+### 注册审核 API
+
+| API | 权限 | 输入与结果 |
+| --- | --- | --- |
+| POST /auth/registration | 网站 Origin＋CSRF；插件有效安装 Bearer；限速 | {email,password,confirmPassword,purpose,consentAccepted:true} → 202 {submitted:true}；不返回用户或令牌 |
+| POST /auth/password/login | 网站 Origin＋CSRF 或插件安装 Bearer；限速 | {email,password} → 网站 {user,expiresAt}＋HttpOnly Cookie；插件 {token,installationId,expiresAt,user} |
+| GET /admin/members | 管理员 web 会话 | state=pending/approved/rejected 默认 pending，cursor 可选 UUID → {items,nextCursor}，每页 50 |
+| PATCH /admin/members/:id/review | 管理员 web 会话＋CSRF | {decision:approved/rejected,note?:string} → {state}；仅 pending 可转移，已处理返回 REVISION_CONFLICT/409 |
+
+- 请求严格 schema。email 去首尾空格、小写、合法邮箱格式且最长 254；密码原样 8–256 字符、两次完全一致；用途去首尾空格后 5–500 字符，备注最长 500。登录密码 1–256；公开请求不能传 userId、role、state。错误 INVALID_INPUT，不返回密码或字段原值。
+- 注册遇到已有 users/member_accounts 邮箱统一返回 submitted，不修改账号或原密码。pending 不创建 users、无会话；批准时原子创建 active 普通用户、绑定账号、写 reviewerId/时间及 member.review 审计。批准碰到已有用户邮箱返回 MEMBER_ACCOUNT_EXISTS/409，绝不按未验证邮箱自动绑定既有账号。
+- 列表仅 {id,email,purpose,state,createdAt,reviewedAt,note,emailVerified:false}，不含密码材料。备注为管理员内部信息。UUID 游标按 id 排序，不保证申请时间顺序；刷新返回第一页。
+- 密码错误/不存在返回 MEMBER_LOGIN_FAILED/401；只有密码正确才显示 REGISTRATION_PENDING/403 或 REGISTRATION_REJECTED/403。停用/失效用户不得登录；审核通过仍须用户主动登录。本版无审核通知、自助重提或密码找回。
+- 密码加盐 scrypt，与内部管理员相同版本；昂贵哈希在身份锁外计算，签发会话事务重新核验密码材料和状态，防止并发变更。插件登录撤销携带的旧会话，不自动关联匿名历史。原有管理员使用独立 /auth/admin/login。
+- 启用需要显式迁移 0009_member_review.sql；无 SMTP/Google/第三方认证依赖。
+
+### 插件发起的网站注册 / 登录窗口
+
+- 入口发送内部 openRegistration，后台打开自家 /extension-auth?extension=<id>&flow=<随机nonce>&lang=<UiLocale>，500×720 独立窗口。先创建空白窗口并保存绑定，再导航；重复打开复用未过期窗口。不替换原店铺页。
+- 窗口分申请注册与密码登录。提交申请需邮箱、密码两次、用途和隐私同意；提交完成只显示待审核。合法登录后才返回原页并刷新域名信息。Google 和邮箱验证码均不显示。
+- 外部消息严格限定 registrationStatus({flow})、registrationSubmit({flow,input:memberRegistrationInput})、registrationLogin({flow,consentAccepted:true,input:memberLoginInput})、registrationFinish({flow})；状态与完成没有任意 API 转发能力。
+- manifest externally_connectable 仅构建时自家 API origin；后台额外要求精确 /extension-auth 路径、顶层 frame、预绑定 tabId 和 30 分钟随机 nonce。输入验证通过后才初始化缺失的安装身份；既有身份复用。
+- 网站发送密码给扩展后台，由后台仅传给自家 API；网页不接收插件 Bearer。sessionStorage 仅保留邮箱和用途，密码只在表单内存中、提交申请/登录成功时清空，不进入日志。chrome.storage.session 保存窗口绑定，完成后清理。
+- 完成前再次验证有效账号，关窗并聚焦原 tab/window；原标签已关闭则不重建。窗口直接访问而缺少有效插件流程时提示从插件打开。网站独立 /account 使用 Cookie/CSRF，不调用插件桥接。

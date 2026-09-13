@@ -269,7 +269,7 @@ describe('M1 business rules — transaction model, not live MySQL', () => {
       f.store.transaction((tx) => f.service.authorize(tx, a.token, 'core')),
     ).rejects.toMatchObject({ code: 'LOGIN_REQUIRED' });
   });
-  it('only web admins can change settings; memory mail never unlocks required login', async () => {
+  it('only web admins can change settings without requiring SMTP', async () => {
     const f = setup(),
       a = await f.install(),
       login = await f.login(a.token);
@@ -286,15 +286,8 @@ describe('M1 business rules — transaction model, not live MySQL', () => {
     });
     f.advance(61000);
     const web = await f.login(undefined, false, 'buyer@example.com', 'web');
-    await expect(
-      f.service.changeSettings(
-        { accessMode: 'login_required', expectedVersion: 1 },
-        web.credential.token,
-        randomUUID(),
-      ),
-    ).rejects.toMatchObject({ code: 'EMAIL_UNAVAILABLE' });
     await f.service.changeSettings(
-      { accessMode: 'anonymous_allowed', expectedVersion: 1 },
+      { accessMode: 'login_required', expectedVersion: 1 },
       web.credential.token,
       randomUUID(),
     );
@@ -466,49 +459,33 @@ describe('M1 HTTP transport — transaction model', () => {
     expect((await response.json()).data.user.role).toBe('admin');
   });
 
-  it('web login uses HttpOnly cookies and CSRF without JSON session leakage', async () => {
-    const f = setup(),
-      handle = createAuthHandler(f.service, {
-        webOrigin: 'https://runad.example',
-        extensionIds: [],
-        production: true,
-      });
-    const csrfResponse = await handle(new Request('https://runad.example/api/v1/auth/csrf'));
-    const jar = csrfResponse.headers.get('set-cookie')!.split(';')[0]!,
-      csrf = (await csrfResponse.json()).data.csrfToken;
+  it('disables legacy email endpoints rather than bypassing administrator review', async () => {
+    const f = setup();
+    const handle = createAuthHandler(f.service, {
+      webOrigin: 'https://runad.example',
+      extensionIds: [],
+      production: true,
+    });
+    const proof = await handle(new Request('https://runad.example/api/v1/auth/csrf'));
     const headers = {
-      'Content-Type': 'application/json',
       Origin: 'https://runad.example',
-      Cookie: jar,
-      'X-CSRF-Token': csrf,
+      'Content-Type': 'application/json',
+      Cookie: proof.headers.getSetCookie()[0]!.split(';')[0]!,
+      'X-CSRF-Token': (await proof.json()).data.csrfToken,
     };
-    const start = await handle(
-      new Request('https://runad.example/api/v1/auth/email/start', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ email: 'a@example.com', clientKind: 'web', deliveryLocale: 'en' }),
-      }),
-    );
-    expect(start.status).toBe(200);
-    const challengeId = (await start.json()).data.challengeId;
-    const verify = await handle(
-      new Request('https://runad.example/api/v1/auth/email/verify', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          challengeId,
-          code: f.mailer.outbox[0]!.code,
-          linkInstallationHistory: false,
+    for (const endpoint of ['start', 'verify']) {
+      const response = await handle(
+        new Request('https://runad.example/api/v1/auth/email/' + endpoint, {
+          method: 'POST',
+          headers,
+          body: '{}',
         }),
-      }),
-    );
-    expect(verify.status).toBe(200);
-    const body = await verify.json();
-    expect('token' in body.data).toBe(false);
-    const cookies = verify.headers.get('set-cookie')!;
-    expect(cookies.includes('HttpOnly')).toBe(true);
-    expect(cookies.includes('Secure')).toBe(true);
-    expect(cookies.includes('__Host-runad-session')).toBe(true);
+      );
+      expect(response.status).toBe(403);
+      expect((await response.json()).error.code).toBe('REGISTRATION_REVIEW_REQUIRED');
+      expect(response.headers.getSetCookie()).toHaveLength(0);
+    }
+    expect(f.mailer.outbox).toHaveLength(0);
   });
   it('rejects hostile origins, missing CSRF, forged role and unapproved extensions', async () => {
     const f = setup(),

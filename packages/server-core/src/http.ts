@@ -1,3 +1,5 @@
+import { MemberService } from './member.js';
+import { DomainRegistrationService } from './domain-registration.js';
 import { ThemeLinkService } from './theme-links.js';
 import { AdminService } from './admin.js';
 import { ExportService } from './exports.js';
@@ -5,8 +7,6 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
   installationInput,
-  emailStartInput,
-  emailVerifyInput,
   settingsInput,
   adminPasswordLoginInput,
 } from '@runad123/contracts/auth';
@@ -23,6 +23,8 @@ export interface HttpOptions {
   trustedIpHeader?: string;
 }
 export function createAuthHandler(service: AuthService, options: HttpOptions) {
+  const domains = new DomainRegistrationService();
+  const members = new MemberService(service);
   const exports = new ExportService(service),
     admin = new AdminService(service);
   const products = new ProductService(service),
@@ -108,6 +110,8 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
           '/tutorials',
           '/config',
           '/auth/csrf',
+          '/auth/registration',
+          '/auth/password/login',
           '/auth/email/start',
           '/auth/email/verify',
         ].includes(path)
@@ -121,6 +125,15 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
         ? (request.headers.get(options.trustedIpHeader) ?? 'missing-proxy').slice(0, 128)
         : 'unconfigured-proxy';
       const query = Object.fromEntries(new URL(request.url).searchParams);
+      if (request.method === 'GET' && path === '/domain-registration') {
+        const actor = await service.store.transaction((tx) => service.authenticate(tx, token));
+        if (!actor.user) throw new ServiceError('LOGIN_REQUIRED', 403);
+        await service.rate([
+          ['domain:ip:' + ip, 60, 30],
+          ['domain:user:' + actor.user.id, 60, 30],
+        ]);
+        return send(await domains.lookup(query));
+      }
       if (request.method === 'GET' && path === '/tutorials') {
         const data = await admin.tutorials(query);
         headers.set('ETag', data.etag);
@@ -170,6 +183,8 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
         return send({ csrfToken: csrf(webToken ?? proof) });
       }
       if (request.method === 'GET' && path === '/me') return send(await service.me(token));
+      if (request.method === 'GET' && path === '/admin/members')
+        return send(await members.list(query, token));
       if (request.method === 'GET' && path === '/admin/settings')
         return send(await service.adminSettings(token));
       const riskMatch = /^\/ai-requests\/([a-f0-9-]{36})(?:\/(retry|cancel))?$/.exec(path);
@@ -204,6 +219,18 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
           throw new ServiceError('CSRF_INVALID', 403);
       }
       const body = await readJson(request);
+      if (request.method === 'POST' && path === '/auth/registration')
+        return send(await members.register(body, ip, bearer), 202);
+      if (request.method === 'POST' && path === '/auth/password/login') {
+        const result = await members.login(body, bearer ? 'extension' : 'web', ip, bearer);
+        if (bearer) return send({ ...result.credential, user: result.user });
+        headers.append('Set-Cookie', cookie(sessionName, result.credential.token, 7 * 86400));
+        headers.append('Set-Cookie', cookie(preName, '', 0));
+        return send({ user: result.user, expiresAt: result.credential.expiresAt });
+      }
+      const memberReview = /^\/admin\/members\/([a-f0-9-]{36})\/review$/.exec(path);
+      if (request.method === 'PATCH' && memberReview)
+        return send(await members.review(memberReview[1]!, body, token, requestId));
       if (request.method === 'PATCH' && path === '/admin/theme-links')
         return send(await new ThemeLinkService(service).save(body, token, requestId));
       if (request.method === 'PATCH' && path === '/admin/sourcing-sites')
@@ -303,30 +330,8 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
       }
       if (path === '/sessions/renew' && request.method === 'POST')
         return send(await service.renew(token));
-      if (path === '/auth/email/start' && request.method === 'POST') {
-        const input = emailStartInput.parse(body);
-        if ((input.clientKind === 'extension') !== !!bearer)
-          throw new ServiceError('FORBIDDEN', 403);
-        const result = await service.start(input, { token: bearer, preAuth }, ip);
-        if (result.preAuth) headers.append('Set-Cookie', cookie(preName, result.preAuth, 600));
-        return send({
-          challengeId: result.challengeId,
-          retryAfterSeconds: result.retryAfterSeconds,
-        });
-      }
-      if (path === '/auth/email/verify' && request.method === 'POST') {
-        const result = await service.verify(
-          emailVerifyInput.parse(body),
-          { token: bearer, preAuth },
-          ip,
-        );
-        if (result.clientKind === 'web') {
-          headers.append('Set-Cookie', cookie(sessionName, result.credential.token, 7 * 86400));
-          headers.append('Set-Cookie', cookie(preName, '', 0));
-          return send({ user: result.user, expiresAt: result.credential.expiresAt });
-        }
-        return send({ ...result.credential, user: result.user });
-      }
+      if (['/auth/email/start', '/auth/email/verify'].includes(path))
+        throw new ServiceError('REGISTRATION_REVIEW_REQUIRED', 403);
       if (path === '/auth/logout' && request.method === 'POST') {
         const result = await service.logout(token);
         if (!bearer) {

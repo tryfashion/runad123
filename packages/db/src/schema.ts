@@ -562,7 +562,40 @@ export const dailyStats = mysqlTable(
   },
   (t) => [uniqueIndex('daily_product_day').on(t.dayUtc, t.productId)],
 );
+export const members = mysqlTable(
+  'member_accounts',
+  {
+    id: id('id').primaryKey(),
+    emailNormalized: varchar('email_normalized', { length: 254 }).notNull(),
+    passwordSalt: binary('password_salt', { length: 16 }).notNull(),
+    passwordHash: binary('password_hash', { length: 64 }).notNull(),
+    passwordVersion: varchar('password_version', { length: 32 }).notNull(),
+    purpose: varchar('purpose', { length: 500 }).notNull(),
+    state: varchar('state', { length: 16 }).$type<'pending' | 'approved' | 'rejected'>().notNull(),
+    userId: id('user_id').references(() => users.id),
+    reviewerId: id('reviewer_id').references(() => users.id),
+    reviewedAt: time('reviewed_at'),
+    reviewNote: varchar('review_note', { length: 500 }).notNull(),
+    createdAt: created(),
+    updatedAt: updated(),
+  },
+  (t) => [
+    uniqueIndex('member_email').on(t.emailNormalized),
+    uniqueIndex('member_user').on(t.userId),
+    index('member_pending').on(t.state, t.id),
+    check('member_state', sql`${t.state} in ('pending','approved','rejected')`),
+    check(
+      'member_approved_user',
+      sql`(${t.state}='approved' and ${t.userId} is not null) or (${t.state}<>'approved' and ${t.userId} is null)`,
+    ),
+    check(
+      'member_review_fields',
+      sql`(${t.state}='pending' and ${t.reviewerId} is null and ${t.reviewedAt} is null) or (${t.state}<>'pending' and ${t.reviewerId} is not null and ${t.reviewedAt} is not null)`,
+    ),
+  ],
+);
 export const tables = {
+  members,
   adminCredentials,
   tutorials,
   deletions,

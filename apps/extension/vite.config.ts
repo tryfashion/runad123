@@ -16,19 +16,24 @@ export default defineConfig(({ mode }) => {
       throw new Error('RUNAD_API_ORIGIN must be an explicit HTTPS origin for a release build.');
     }
   }
+  let outputDirectory = resolve(import.meta.dirname, 'dist');
   return {
     base: './',
     define: { __RUNAD_API_ORIGIN__: JSON.stringify(apiOrigin) },
     plugins: [
       {
         name: 'api-host-permission',
+        configResolved(config) {
+          outputDirectory = resolve(config.root, config.build.outDir);
+        },
         closeBundle() {
           const manifest = JSON.parse(
             readFileSync(resolve(import.meta.dirname, 'public/manifest.json'), 'utf8'),
           );
-          manifest.host_permissions = [apiOrigin + '/*', 'https://rdap.org/*'];
+          manifest.host_permissions = [apiOrigin + '/*'];
+          manifest.externally_connectable = { matches: [apiOrigin + '/*'] };
           writeFileSync(
-            resolve(import.meta.dirname, 'dist/manifest.json'),
+            resolve(outputDirectory, 'manifest.json'),
             JSON.stringify(manifest, null, 2),
           );
         },

@@ -143,7 +143,7 @@ export class AuthService {
     if (installation.linkedUserId) return actor.user?.id === installation.linkedUserId;
     return !actor.user && actor.installation?.id === installation.id;
   }
-  private async issue(
+  async issue(
     tx: AuthTransaction,
     kind: Rows['sessions']['kind'],
     installationId: string | null,
@@ -500,12 +500,6 @@ export class AuthService {
   ) {
     settingsInput.parse(input);
     await this.store.transaction((tx) => this.authorize(tx, token, 'admin'));
-    // An SMTP connection check is necessary but not proof of inbox delivery. Memory mail never unlocks this switch.
-    if (
-      input.accessMode === 'login_required' &&
-      (this.mailer.kind !== 'smtp' || !(await this.mailer.verify()))
-    )
-      throw new ServiceError('EMAIL_UNAVAILABLE', 503);
     return this.store.transaction(async (tx) => {
       const actor = await this.authorize(tx, token, 'admin'),
         before = await this.gate(tx);

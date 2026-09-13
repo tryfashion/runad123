@@ -14,6 +14,7 @@ function matches(row: unknown, where: unknown) {
 // Transaction model for isolated business tests, not a MySQL substitute or integration test.
 export class MemoryAuthStore implements AuthStore {
   rows: { [K in TableName]: Rows[K][] } = {
+    members: [],
     adminCredentials: [],
     tutorials: [],
     deletions: [],

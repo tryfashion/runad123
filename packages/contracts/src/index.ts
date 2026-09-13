@@ -1,3 +1,6 @@
+export * from './member-i18n.js';
+export * from './member.js';
+export * from './domain-registration.js';
 import { z } from 'zod';
 
 export const uiLocaleSchema = z.enum(['zh-Hans', 'zh-Hant', 'en']);

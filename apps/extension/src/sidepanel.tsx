@@ -126,7 +126,9 @@ function Panel({ initialPreference }: { initialPreference: UiPreference }) {
             <span aria-hidden="true">→</span>
           </button>
         </div>
-        {view === 'overview' && <WebsitePanel locale={locale} />}
+        {view === 'overview' && (
+          <WebsitePanel locale={locale} onAccount={() => setView('account')} />
+        )}
         {view === 'tutorials' && <TutorialPanel locale={locale} />}
         {view === 'tools' && <section className="tools-panel" aria-label={ui('tools')} />}
         {view === 'account' && (

@@ -18,6 +18,7 @@
 | 表 | 关键字段 | 必需约束/索引 |
 | --- | --- | --- |
 | users | id、email_normalized、email_display、role(user/admin)、status(active/disabled)、last_login_at | UNIQUE(email_normalized)；role 不来自公开注册请求 |
+| member_accounts | id、email_normalized、password_salt BINARY(16)、password_hash BINARY(64)、password_version、purpose、state、user_id nullable、reviewer_id nullable、reviewed_at nullable、review_note | UNIQUE(email_normalized)、UNIQUE(user_id)；INDEX(state,id)；用户/审核人 FK users；状态与关联字段 CHECK，见下文 |
 | installations | id、status、consent_version、consented_at、linked_user_id nullable、linked_at、last_seen_at、extension_version | INDEX(linked_user_id)；linked_user_id 只记录明确同意的历史归属关联 |
 | sessions | id、token_hash、kind(anonymous/extension/web)、installation_id nullable、user_id nullable、expires_at、last_seen_at、revoked_at | UNIQUE(token_hash)；INDEX(user_id,revoked_at)；匿名必须有 installation，无 user |
 | auth_challenges | id、email_normalized、installation_id nullable、pre_auth_hash nullable、code_hmac nullable（消费后清除）、state(pending/sent/failed)、expires_at、attempts、consumed_at、client_kind、delivery_locale | INDEX(email_normalized,created_at)；仅 sent 可验证，校验/消费事务化，一次性使用；邮件语言创建时冻结 |
@@ -29,13 +30,23 @@
 
 匿名会话有效期初始 90 天，登录插件会话 30 天，网站会话 7 天；过期重新认证。匿名/插件续期只凭仍有效的会话延长现有 token 有效期，不更换 token，不可凭 installation ID 领回旧身份。同意关联历史时撤销该安装的匿名会话；退出撤销当前登录会话，已关联安装建立新的匿名上下文，未关联安装才可恢复仍有效的原匿名凭据，不把用户数据暴露给匿名态。禁用/撤销优先于续期，且不能使过期会话复活。
 
-邮箱规范化：去首尾空格并统一大小写用于账号匹配；不擅自去掉 Gmail 点号/加号别名。验证码发送接口不泄露邮箱是否已注册。生产邮件未配置时接口显式不可用，不启用开发验证码后门。
+邮箱规范化：去首尾空格、小写，不改 Gmail 点号/加号。当前邮箱只是未验证的登录名，不作为所有权证明；重复申请不泄露已有账号状态，不覆盖密码或接管 users。旧邮箱验证码 HTTP 端点已停用。
 
 M1 落地约定：首个迁移为 packages/db/migrations/0000_m1_identity.sql，仅建 users、installations、sessions、auth_challenges、rate_limit_buckets、settings、admin_audit_logs；tutorials 在教程阶段迁移。初始 settings 仅 access_mode=anonymous_allowed，版本 1。表使用 utf8mb4_0900_bin，邮箱由应用先小写匹配；摘要通过 Drizzle 自定义 Buffer 类型读写，禁止 UTF-8 字符串转换损坏二进制。
 
 迁移命令要求已有 MySQL 8.0.16+（CHECK 实际执行）及 STRICT 模式；连接 UTC。runad_migrations 运维表记录 name/checksum/state/created_at/updated_at，GET_LOCK 防并发；每个文件先记 applying、全部执行后改 applied，成功重跑跳过，checksum 改变或遗留 applying 均停止人工复核。MySQL DDL 隐式提交，失败不能宣称完整回滚。迁移不自动建库、不自动 push。
 
-M1 身份事务统一先锁 settings.access_mode 行，序列化安装、验证码消费、会话和限速计数，避免并发绕过及反向锁序。SMTP 网络调用在事务之外。该策略适用于初期低流量，吞吐和锁等待必须实测；后续商品/AI 事务不能持有此锁再按另一顺序进入身份服务。单次身份查找最多 100 行，按创建时间倒序；并非批量后台列表接口。
+M1 身份事务统一先锁 settings.access_mode 行，序列化安装、验证码消费、会话和限速计数，避免并发绕过及反向锁序。密码哈希和遗留 SMTP 网络调用在事务之外；审核和会话签发事务内重新检查状态。该策略适用于初期低流量，吞吐和锁等待必须实测；后续商品/AI 事务不能持有此锁再按另一顺序进入身份服务。单次身份查找最多 100 行，按创建时间倒序；并非批量后台列表接口。
+
+### member_accounts 注册审核（迁移 0009）
+
+- 注册申请仅创建 pending 行，purpose 为 5–500 字符；密码至少 8 字符，独立随机盐及 scrypt-v1 哈希，不保存明文。email_normalized 最长 254，review_note 最长 500。
+- state 只允许 pending/approved/rejected。CHECK：approved 必须有 user_id，其余状态必须为空；pending 的 reviewer_id/reviewed_at 必须为空，其余状态均非空。
+- 批准时在同一身份锁事务内确认 pending、检查已有邮箱冲突、创建 active 普通 user、填审核人/时间并写 member.review 审计；拒绝不创建 user。并发审核只允许一个成功，其余冲突。唯一邮箱约束防止并发重复申请。
+- 未验证邮箱不自动关联旧账号。新密码登录重新核验 user active；密码验证成功前不泄露审批状态。数据列表不返回盐、哈希；审核备注仅管理员可见。
+- 无邮件通知、自助重提、密码找回。申请/审批记录当前保留供人工审核；现有“删除我的数据”删除业务草稿/采集，不是销户，不删除身份凭据。销户和申请记录保留政策需单独实现。
+- 既有邮箱验证码表作为历史兼容保留，公开 HTTP 禁用，不能成为绕过审核的入口。M1 的历史关联能力仍保留内部实现，本次密码注册不启用。
+- 本地迁移验证需要运行 node --env-file-if-exists=.env.test --import tsx scripts/test-member-mysql.ts，仅允许 runad123_test 或 runad123_test_ 后缀测试库，不创建/删除数据库。
 
 ## 3. 商品、采集和草稿
 
