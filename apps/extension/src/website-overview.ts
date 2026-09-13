@@ -144,7 +144,7 @@ export async function readWebsite() {
 
   const pixelRules: Array<[string, RegExp]> = [
     ['Meta Pixel (Facebook/Instagram)', /connect\.facebook\.net|fbq\(|facebook\.com\/tr/i],
-    ['Pinterest Tag', /ct\.pinterest\.com|pintrk\(/i],
+    ['Pinterest Tag', /ct\.pinterest\.com|pintrk\(|s\.pinimg\.com|assets\.pinterest\.com/i],
     ['TikTok Pixel', /analytics\.tiktok\.com|ttq\(/i],
     ['Snap Pixel', /sc-static\.net|snaptr\(/i],
   ];
@@ -165,7 +165,6 @@ export async function readWebsite() {
     ['Recharge', /recharge/i],
     ['Shopify Reviews', /productreviews\.shopifycdn/i],
     ['Afterpay', /afterpay/i],
-    ['Shop Pay', /shopify_pay|shop-pay|shopify-payment/i],
     ['Postscript', /postscript/i],
     ['Attentive', /attentive/i],
     ['Omnisend', /omnisend/i],
@@ -186,17 +185,30 @@ export async function readWebsite() {
     analyticsRules.filter(([, rule]) => rule.test(scriptHaystack)).map(([name]) => name),
   );
   const apps = uniq(appRules.filter(([, rule]) => rule.test(scriptHaystack)).map(([name]) => name));
-  const knownDomains = [
+  const ignoredDomains = [
     location.hostname,
     'cdn.shopify.com',
     'shopifycdn.net',
     'myshopify.com',
-    'googletagmanager.com',
-    'google-analytics.com',
+    'shopify.com',
+    'shop.app',
+    'schema.org',
+    'w3.org',
+    'gstatic.com',
+    'googleapis.com',
+    'google.com',
+    'googleusercontent.com',
+    'cloudfront.net',
+    'fastly.net',
+    'cloudflare.com',
+    'cloudflareinsights.com',
     'facebook.com',
     'facebook.net',
     'pinterest.com',
+    'pinimg.com',
     'tiktok.com',
+    'googletagmanager.com',
+    'google-analytics.com',
   ];
   const thirdPartyDomains = uniq(
     assetValues
@@ -206,7 +218,7 @@ export async function readWebsite() {
       .map((host) => host.toLowerCase().replace(/^www\./, ''))
       .filter(
         (host) =>
-          host && !knownDomains.some((known) => host === known || host.endsWith('.' + known)),
+          host && !ignoredDomains.some((known) => host === known || host.endsWith('.' + known)),
       ),
   );
   const namedTechnology = new Set(
