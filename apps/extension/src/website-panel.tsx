@@ -1,5 +1,5 @@
 import { ThemeAffiliate } from './theme-affiliate';
-import { cachedOverview, overviewCacheKey, saveOverview } from './website-cache';
+import { saveOverview } from './website-cache';
 import { useEffect, useRef, useState } from 'react';
 import type { UiLocale } from '@runad123/contracts/i18n';
 import { readWebsite, overviewText, type WebsiteOverview } from './website-overview';
@@ -39,17 +39,9 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab?.id === undefined || !tab.url || !/^https?:\/\//.test(tab.url))
           throw Error('unavailable');
-        const key = overviewCacheKey(tab.url);
-        const stored = await chrome.storage.local.get(key);
-        const cached = cachedOverview(stored[key], tab.url);
         const stillCurrent = await chrome.tabs.get(tab.id);
         if (!stillCurrent.active || stillCurrent.url !== tab.url || version !== generation.current)
           throw Error('unavailable');
-        if (cached) {
-          setData(cached.data);
-          setSavedAt(cached.savedAt);
-          if (cached.fresh) return cached.data;
-        }
         if (
           grant &&
           !(await chrome.permissions.request({ origins: [new URL(tab.url).origin + '/*'] }))
