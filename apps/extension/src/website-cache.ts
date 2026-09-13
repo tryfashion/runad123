@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { WebsiteOverview } from './website-overview.js';
-export const overviewCachePrefix = 'websiteOverview:v3:';
+export const overviewCachePrefix = 'websiteOverview:v4:';
 export const beijingDay = (time: number) => new Date(time + 8 * 3600000).toISOString().slice(0, 10);
 export const overviewCacheKey = (url: string) => overviewCachePrefix + new URL(url).origin;
 const entrySchema = z.object({
@@ -28,6 +28,9 @@ const entrySchema = z.object({
     analytics: z.array(z.string().max(80)).max(20).catch([]),
     other: z.array(z.string().max(120)).max(20).catch([]),
     metaAdsUrl: z.url().catch('https://www.facebook.com/ads/library/'),
+    domainCreated: z.string().max(250).catch(''),
+    domainExpires: z.string().max(250).catch(''),
+    registrar: z.string().max(250).catch(''),
   }),
 });
 export function cachedOverview(value: unknown, url: string, now = Date.now()) {

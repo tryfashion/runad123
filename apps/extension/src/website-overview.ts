@@ -22,6 +22,9 @@ const en = {
   lowestPrice: 'Lowest price',
   averagePrice: 'Average price',
   highestPrice: 'Highest price',
+  domainCreated: 'Domain registered',
+  domainExpires: 'Domain expires',
+  registrar: 'Registrar',
   technologies: 'Detected technology',
   pixels: 'pixels',
   apps: 'apps',
@@ -57,6 +60,9 @@ const dictionary: Record<UiLocale, typeof en> = {
     lowestPrice: '最低价',
     averagePrice: '平均价',
     highestPrice: '最高价',
+    domainCreated: '域名注册',
+    domainExpires: '域名到期',
+    registrar: '注册商',
     technologies: '检测到的技术',
     pixels: '像素',
     apps: '应用',
@@ -90,6 +96,9 @@ const dictionary: Record<UiLocale, typeof en> = {
     lowestPrice: '最低價',
     averagePrice: '平均價',
     highestPrice: '最高價',
+    domainCreated: '網域註冊',
+    domainExpires: '網域到期',
+    registrar: '註冊商',
     technologies: '偵測到的技術',
     pixels: '像素',
     apps: '應用',
@@ -215,6 +224,7 @@ export async function readWebsite() {
     'jsdelivr.cloud',
     'cdn.jsdelivr.net',
     'shopify.jsdelivr.cloud',
+    'shopify.jsdeliver.cloud',
   ];
   const thirdPartyDomains = uniq(
     assetValues
@@ -423,6 +433,9 @@ export async function readWebsite() {
     analytics,
     other,
     metaAdsUrl,
+    domainCreated: '',
+    domainExpires: '',
+    registrar: '',
   };
 }
 export type WebsiteOverview = Awaited<ReturnType<typeof readWebsite>>;

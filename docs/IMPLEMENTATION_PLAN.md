@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-13 网站概览增加域名注册信息：插件构建权限增加 rdap.org，只在概览读取时通过 RDAP 查询当前域名注册时间、到期时间和注册商，失败时显示未识别且不影响 Shopify 信息；同时过滤 shopify.jsdeliver.cloud。已执行 lint、typecheck、@runad123/extension build 通过，dist manifest 已包含 https://rdap.org/*；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。
+
 - 2026-09-13 网站概览应用列表继续降噪：按实测结果移除 Vitals 作为应用显示，并把 jsdelivr、shopify.jsdelivr.cloud、monorail-edge.shopifysvc.com、extensions/fonts.shopifycdn.com 等公共 CDN/Shopify 基础设施加入忽略，应用列表优先保留独立第三方服务域名。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。
 
 - 2026-09-13 网站概览缓存策略恢复：按用户确认恢复为每天第一次进入自动读取，当天再次进入复用缓存；底部“读取当前网站”按钮继续作为手动强制重读入口，避免频繁切换标签时重复扫描。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。

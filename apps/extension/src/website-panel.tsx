@@ -4,6 +4,50 @@ import { useEffect, useRef, useState } from 'react';
 import type { UiLocale } from '@runad123/contracts/i18n';
 import { readWebsite, overviewText, type WebsiteOverview } from './website-overview';
 
+async function enrichDomainRegistration(data: WebsiteOverview): Promise<WebsiteOverview> {
+  const parseDate = (value: unknown) => (typeof value === 'string' ? value : '');
+  const parseRegistrar = (value: unknown) => {
+    if (!Array.isArray(value)) return '';
+    for (const entity of value) {
+      const roles = (entity as { roles?: unknown }).roles;
+      if (!Array.isArray(roles) || !roles.includes('registrar')) continue;
+      const vcard = (entity as { vcardArray?: unknown }).vcardArray;
+      const rows = Array.isArray(vcard) && Array.isArray(vcard[1]) ? vcard[1] : [];
+      for (const row of rows) {
+        if (Array.isArray(row) && row[0] === 'fn' && typeof row[3] === 'string') return row[3];
+      }
+    }
+    return '';
+  };
+  try {
+    const response = await fetch('https://rdap.org/domain/' + encodeURIComponent(data.host), {
+      credentials: 'omit',
+      cache: 'no-store',
+      redirect: 'error',
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return data;
+    const body = (await response.json()) as { events?: unknown; entities?: unknown };
+    const events = Array.isArray(body.events) ? body.events : [];
+    const eventDate = (actions: string[]) =>
+      parseDate(
+        events.find(
+          (event) =>
+            typeof (event as { eventAction?: unknown }).eventAction === 'string' &&
+            actions.includes((event as { eventAction: string }).eventAction.toLowerCase()),
+        )?.eventDate,
+      );
+    return {
+      ...data,
+      domainCreated: eventDate(['registration', 'registered']),
+      domainExpires: eventDate(['expiration', 'expiry', 'expires']),
+      registrar: parseRegistrar(body.entities),
+    };
+  } catch {
+    return data;
+  }
+}
+
 export function WebsitePanel({ locale }: { locale: UiLocale }) {
   const t = (key: Parameters<typeof overviewText>[1]) => overviewText(locale, key);
   const [data, setData] = useState<WebsiteOverview | null>(null);
@@ -70,9 +114,10 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
         if (!result || !current.active || current.url !== tab.url || result.pageUrl !== tab.url)
           throw Error('unavailable');
         if (version !== generation.current) throw Error('unavailable');
-        const updatedAt = await saveOverview(result);
+        const enriched = await enrichDomainRegistration(result);
+        const updatedAt = await saveOverview(enriched);
         if (version === generation.current) setSavedAt(updatedAt);
-        return result;
+        return enriched;
       };
       const result = await Promise.race([
         work(),
@@ -185,6 +230,18 @@ export function WebsitePanel({ locale }: { locale: UiLocale }) {
             <div>
               <dt>{t('highestPrice')}</dt>
               <dd className="price-high">{price(data.highestPrice)}</dd>
+            </div>
+            <div>
+              <dt>{t('domainCreated')}</dt>
+              <dd>{date(data.domainCreated)}</dd>
+            </div>
+            <div>
+              <dt>{t('domainExpires')}</dt>
+              <dd>{date(data.domainExpires)}</dd>
+            </div>
+            <div>
+              <dt>{t('registrar')}</dt>
+              <dd>{data.registrar || t('unknown')}</dd>
             </div>
           </dl>
           <div className="website-card website-tech-card">

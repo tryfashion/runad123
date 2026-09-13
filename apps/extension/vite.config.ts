@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => {
           const manifest = JSON.parse(
             readFileSync(resolve(import.meta.dirname, 'public/manifest.json'), 'utf8'),
           );
-          manifest.host_permissions = [apiOrigin + '/*'];
+          manifest.host_permissions = [apiOrigin + '/*', 'https://rdap.org/*'];
           writeFileSync(
             resolve(import.meta.dirname, 'dist/manifest.json'),
             JSON.stringify(manifest, null, 2),
