@@ -237,6 +237,7 @@ export async function readWebsite() {
     'cdn.jsdelivr.net',
     'shopify.jsdelivr.cloud',
     'shopify.jsdeliver.cloud',
+    'cdn1.intercartclothing.com',
   ];
   const thirdPartyDomains = uniq(
     assetValues

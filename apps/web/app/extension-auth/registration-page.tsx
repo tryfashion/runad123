@@ -327,23 +327,25 @@ export function RegistrationPage({
                   )}
                 </>
               )}
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  checked={consent}
-                  onChange={(e) => setConsent(e.target.checked)}
-                  required
-                />
-                <span>
-                  {t('consent')}{' '}
-                  <a href={'/privacy?lang=' + locale} target="_blank" rel="noreferrer">
-                    {t('privacy')}
-                  </a>
-                </span>
-              </label>
+              {mode === 'register' && (
+                <label className={styles.check}>
+                  <input
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                    required
+                  />
+                  <span>
+                    {t('consent')}{' '}
+                    <a href={'/privacy?lang=' + locale} target="_blank" rel="noreferrer">
+                      {t('privacy')}
+                    </a>
+                  </span>
+                </label>
+              )}
               <button
                 className={styles.primary}
-                disabled={!ready || busy || !consent || seconds > 0}
+                disabled={!ready || busy || (mode === 'register' && !consent) || seconds > 0}
               >
                 {busy ? '…' : t(mode === 'register' ? 'submit' : 'login')}
                 {seconds > 0 ? ' (' + seconds + 's)' : ''}
@@ -353,7 +355,7 @@ export function RegistrationPage({
         )}
         {error && (
           <p role="alert" className={styles.error}>
-            {['BRIDGE_UNAVAILABLE', 'FORBIDDEN'].includes(error)
+            {error === 'BRIDGE_UNAVAILABLE'
               ? t('unavailable')
               : (memberError(locale, error) ?? authText(locale, error))}
           </p>

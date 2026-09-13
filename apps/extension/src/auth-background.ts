@@ -207,7 +207,7 @@ chrome.runtime.onMessageExternal.addListener((raw: unknown, sender, respond) => 
     .catch(() => undefined)
     .then(async () => {
       const flow = await validRegistrationSender(sender, message.flow);
-      if (!flow) throw { code: 'FORBIDDEN' };
+      if (!flow) throw { code: 'REGISTRATION_WINDOW_EXPIRED' };
       if (message.action === 'registrationStatus') return dispatch({ action: 'status' });
       if (message.action === 'registrationSubmit' || message.action === 'registrationLogin') {
         const status = await dispatch({ action: 'status' });

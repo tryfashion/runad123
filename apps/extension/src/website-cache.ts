@@ -44,6 +44,12 @@ export function cachedOverview(value: unknown, url: string, now = Date.now()) {
     entry.data.host !== new URL(url).hostname
   )
     return null;
+  // Apply the current display exclusion to previously saved daily results too.
+  for (const key of ['apps', 'other'] as const)
+    entry.data[key] = entry.data[key].filter((name) => {
+      const host = name.toLowerCase();
+      return host !== 'cdn1.intercartclothing.com' && !host.endsWith('.cdn1.intercartclothing.com');
+    });
   return { ...entry, fresh: beijingDay(entry.savedAt) === beijingDay(now) };
 }
 export async function saveOverview(data: WebsiteOverview) {

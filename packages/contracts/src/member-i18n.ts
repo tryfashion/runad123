@@ -22,7 +22,12 @@ const en = {
   success: 'Signed in',
   returning: 'Returning to the extension…',
   back: 'Back to extension',
-  unavailable: 'Open this page from Register / Sign in in the runad123 extension.',
+  unavailable:
+    'The extension connection was lost or its version is outdated. Reload runad123 in Chrome Extensions, refresh the shop page, then reopen Register / Sign in.',
+  REGISTRATION_WINDOW_EXPIRED:
+    'This registration window has expired. Close it and reopen Register / Sign in from the extension.',
+  FORBIDDEN:
+    'The server rejected this request. Please contact the administrator to check extension access settings.',
   later: 'You can close this window and keep using the basic features.',
   confirmAction: 'Confirm',
   cancel: 'Cancel',
@@ -72,7 +77,10 @@ const dictionaries: Record<UiLocale, typeof en> = {
     success: '登录成功',
     returning: '正在返回插件…',
     back: '返回插件',
-    unavailable: '请从 runad123 插件的“注册 / 登录”入口打开此页面。',
+    unavailable:
+      '插件连接已断开或版本不匹配。请在 Chrome 扩展管理页重新加载 runad123，刷新店铺页面，再重新打开注册 / 登录。',
+    REGISTRATION_WINDOW_EXPIRED: '注册窗口已失效，请关闭后从插件重新打开注册 / 登录。',
+    FORBIDDEN: '服务器拒绝了此次请求，请联系管理员检查插件访问配置。',
     later: '可以关闭此窗口，继续使用插件基础功能。',
     confirmAction: '确认',
     cancel: '取消',
@@ -118,7 +126,10 @@ const dictionaries: Record<UiLocale, typeof en> = {
     success: '登入成功',
     returning: '正在返回外掛…',
     back: '返回外掛',
-    unavailable: '請從 runad123 外掛的「註冊 / 登入」入口開啟此頁面。',
+    unavailable:
+      '外掛連線已中斷或版本不相符。請在 Chrome 擴充功能管理頁重新載入 runad123，重新整理商店頁面，再重新開啟註冊 / 登入。',
+    REGISTRATION_WINDOW_EXPIRED: '註冊視窗已失效，請關閉後從外掛重新開啟註冊 / 登入。',
+    FORBIDDEN: '伺服器拒絕了此次請求，請聯絡管理員檢查外掛存取設定。',
     later: '可以關閉此視窗，繼續使用外掛基礎功能。',
     confirmAction: '確認',
     cancel: '取消',

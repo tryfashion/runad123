@@ -316,3 +316,4 @@ Blob 属于 offscreen 文档，service worker 保存 permitId/downloadId/主体/
 - manifest externally_connectable 仅构建时自家 API origin；后台额外要求精确 /extension-auth 路径、顶层 frame、预绑定 tabId 和 30 分钟随机 nonce。输入验证通过后才初始化缺失的安装身份；既有身份复用。
 - 网站发送密码给扩展后台，由后台仅传给自家 API；网页不接收插件 Bearer。sessionStorage 仅保留邮箱和用途，密码只在表单内存中、提交申请/登录成功时清空，不进入日志。chrome.storage.session 保存窗口绑定，完成后清理。
 - 完成前再次验证有效账号，关窗并聚焦原 tab/window；原标签已关闭则不重建。窗口直接访问而缺少有效插件流程时提示从插件打开。网站独立 /account 使用 Cookie/CSRF，不调用插件桥接。
+注册弹窗桥接拒绝（窗口过期或来源绑定不符）返回 REGISTRATION_WINDOW_EXPIRED；服务器 FORBIDDEN 保留为权限拒绝，不映射为插件入口错误。Chrome 通信失败提示插件重载/版本检查，不放宽来源验证。

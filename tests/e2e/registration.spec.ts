@@ -45,8 +45,11 @@ test('real extension application and reviewed login bridge with simulated API', 
           data = { token: 't'.repeat(64), installationId, expiresAt };
         else if (path.endsWith('/me'))
           data = { user, installationId, expiresAt, loginRequired: false, quota: null };
-        else if (path.endsWith('/auth/registration')) data = { submitted: true };
-        else if (path.endsWith('/auth/password/login')) {
+        else if (path.endsWith('/auth/registration')) {
+          if (!(globalThis as unknown as { allowRegistration?: boolean }).allowRegistration)
+            return Response.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
+          data = { submitted: true };
+        } else if (path.endsWith('/auth/password/login')) {
           if (!(globalThis as unknown as { reviewed?: boolean }).reviewed)
             return Response.json({ error: { code: 'REGISTRATION_PENDING' } }, { status: 403 });
           data = { token: 'u'.repeat(64), installationId, expiresAt };
@@ -103,6 +106,13 @@ test('real extension application and reviewed login bridge with simulated API', 
     await popup.getByLabel('密码', { exact: true }).fill('Synthetic-pass-42');
     await popup.getByLabel('确认密码', { exact: true }).fill('Synthetic-pass-42');
     await popup.getByRole('checkbox').check();
+    await popup.getByRole('button', { name: '注册', exact: true }).last().click();
+    await expect(popup.locator('p[role=alert]')).toHaveText(
+      '服务器拒绝了此次请求，请联系管理员检查插件访问配置。',
+    );
+    await worker.evaluate(() => {
+      (globalThis as unknown as { allowRegistration: boolean }).allowRegistration = true;
+    });
     await popup.getByRole('button', { name: '注册', exact: true }).last().click();
     await expect(popup.getByRole('heading', { name: '申请已提交' })).toBeVisible();
     await popup.screenshot({ path: 'artifacts/registration-pending.png', fullPage: true });
