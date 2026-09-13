@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-13 网站概览应用列表继续降噪：按实测结果移除 Vitals 作为应用显示，并把 jsdelivr、shopify.jsdelivr.cloud、monorail-edge.shopifysvc.com、extensions/fonts.shopifycdn.com 等公共 CDN/Shopify 基础设施加入忽略，应用列表优先保留独立第三方服务域名。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。
+
 - 2026-09-13 网站概览缓存策略恢复：按用户确认恢复为每天第一次进入自动读取，当天再次进入复用缓存；底部“读取当前网站”按钮继续作为手动强制重读入口，避免频繁切换标签时重复扫描。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。
 
 - 2026-09-13 网站概览临时改为每次重读：为了便于当前调试和立刻看到识别改动，网站概览进入页面时不再复用当天缓存，而是每次重新读取当前网站数据；仍保存本次读取时间用于展示。后续识别稳定后再恢复为一天一次或手动读取。已执行 lint、typecheck、@runad123/extension build 通过；插件构建仍有 sidepanel chunk 超 500k 的既有体积提醒。

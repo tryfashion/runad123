@@ -175,7 +175,6 @@ export async function readWebsite() {
     ['PageFly', /pagefly/i],
     ['GemPages', /gempages/i],
     ['Shogun', /shogun/i],
-    ['Vitals', /vitals/i],
     ['Avada', /avada/i],
   ];
   const pixels = uniq(
@@ -189,6 +188,9 @@ export async function readWebsite() {
     location.hostname,
     'cdn.shopify.com',
     'shopifycdn.net',
+    'shopifycdn.com',
+    'shopifysvc.com',
+    'shopifycloud.com',
     'myshopify.com',
     'shopify.com',
     'shop.app',
@@ -209,6 +211,10 @@ export async function readWebsite() {
     'tiktok.com',
     'googletagmanager.com',
     'google-analytics.com',
+    'jsdelivr.net',
+    'jsdelivr.cloud',
+    'cdn.jsdelivr.net',
+    'shopify.jsdelivr.cloud',
   ];
   const thirdPartyDomains = uniq(
     assetValues
