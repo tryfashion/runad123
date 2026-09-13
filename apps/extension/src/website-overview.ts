@@ -147,10 +147,21 @@ export async function readWebsite() {
     ['Recharge', /recharge/i],
     ['Shopify Reviews', /productreviews\.shopifycdn/i],
     ['Afterpay', /afterpay/i],
-    ['Shop Pay', /shopify_pay|shop-pay/i],
+    ['Shop Pay', /shopify_pay|shop-pay|shopify-payment/i],
     ['Hotjar', /hotjar/i],
-    ['Triple Whale', /triplewhale/i],
+    ['Triple Whale', /triplewhale|triple-whale/i],
     ['Postscript', /postscript/i],
+    ['Attentive', /attentive/i],
+    ['Omnisend', /omnisend/i],
+    ['Privy', /privy/i],
+    ['Stamped', /stamped/i],
+    ['Okendo', /okendo/i],
+    ['Smile.io', /smile\.io|smile-ui/i],
+    ['PageFly', /pagefly/i],
+    ['GemPages', /gempages/i],
+    ['Shogun', /shogun/i],
+    ['Vitals', /vitals/i],
+    ['Avada', /avada/i],
   ];
   const apps = uniq(appRules.filter(([, rule]) => rule.test(scriptHaystack)).map(([name]) => name));
 
@@ -173,40 +184,85 @@ export async function readWebsite() {
   let lowestPrice: number | null = null;
   let averagePrice: number | null = null;
   let highestPrice: number | null = null;
+  const productPrices = new Set<number>();
+  const addPrice = (value: unknown) => {
+    const parsed = money(value);
+    if (parsed !== null && parsed >= 0) productPrices.add(parsed);
+  };
+  const parseProductList = (products: unknown[]) => {
+    productsRead = Math.max(productsRead, products.length);
+    const dates = products
+      .map((product) => text((product as { published_at?: unknown }).published_at))
+      .filter(Boolean)
+      .sort();
+    firstPublished = firstPublished || dates[0] || '';
+    latestPublished = latestPublished || dates.at(-1) || '';
+    for (const product of products) {
+      if (Array.isArray((product as { variants?: unknown }).variants)) {
+        for (const variant of (product as { variants: Array<{ price?: unknown }> }).variants) {
+          addPrice(variant.price);
+        }
+      }
+    }
+  };
   try {
     if (marker) {
-      const response = await fetch(new URL('/products.json?limit=50', location.origin), {
-        credentials: 'omit',
-        cache: 'no-store',
-      });
-      if (response.ok) {
+      for (const path of ['/products.json?limit=50', '/collections/all/products.json?limit=50']) {
+        const response = await fetch(new URL(path, location.origin), {
+          credentials: 'omit',
+          cache: 'no-store',
+        });
+        if (!response.ok) continue;
         const body = (await response.json()) as { products?: unknown[] };
         const products = Array.isArray(body.products) ? body.products : [];
-        productsRead = products.length;
-        const dates = products
-          .map((product) => text((product as { published_at?: unknown }).published_at))
-          .filter(Boolean)
-          .sort();
-        firstPublished = dates[0] ?? '';
-        latestPublished = dates.at(-1) ?? '';
-        const prices = products
-          .flatMap((product) =>
-            Array.isArray((product as { variants?: unknown }).variants)
-              ? ((product as { variants: Array<{ price?: unknown }> }).variants ?? []).map(
-                  (variant) => money(variant.price),
-                )
-              : [],
-          )
-          .filter((price): price is number => price !== null);
-        if (prices.length) {
-          lowestPrice = Math.min(...prices);
-          highestPrice = Math.max(...prices);
-          averagePrice = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+        if (products.length) {
+          parseProductList(products);
+          break;
         }
       }
     }
   } catch {
     /* Public Shopify product JSON is optional. */
+  }
+  const priceNodes = Array.from(
+    document.querySelectorAll(
+      '[data-product-id], [data-price], [data-product-price], .price, [class*="price" i]',
+    ),
+  );
+  for (const node of priceNodes) {
+    const element = node as HTMLElement;
+    addPrice(element.getAttribute('data-price'));
+    addPrice(element.getAttribute('data-product-price'));
+    const raw = (element.textContent ?? '').replace(/,/g, '');
+    const matched = raw.match(/(?:USD|US\$|\$)\s*([0-9]+(?:\.[0-9]{1,2})?)/i);
+    if (matched) addPrice(matched[1]);
+  }
+  const jsonLdScripts = Array.from(
+    document.querySelectorAll<HTMLScriptElement>('script[type="application/ld+json"]'),
+  );
+  for (const script of jsonLdScripts) {
+    try {
+      const json = JSON.parse(script.textContent || 'null') as unknown;
+      const rows = Array.isArray(json) ? json : [json];
+      for (const row of rows) {
+        const offer = (row as { offers?: unknown })?.offers;
+        const offers = Array.isArray(offer) ? offer : offer ? [offer] : [];
+        for (const item of offers)
+          addPrice(
+            (item as { price?: unknown; lowPrice?: unknown; highPrice?: unknown }).price ??
+              (item as { lowPrice?: unknown }).lowPrice ??
+              (item as { highPrice?: unknown }).highPrice,
+          );
+      }
+    } catch {
+      /* Ignore malformed JSON-LD. */
+    }
+  }
+  const prices = Array.from(productPrices);
+  if (prices.length) {
+    lowestPrice = Math.min(...prices);
+    highestPrice = Math.max(...prices);
+    averagePrice = prices.reduce((sum, price) => sum + price, 0) / prices.length;
   }
 
   const metaAdsUrl = `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=ALL&search_type=page&view_all_page_id=&q=${encodeURIComponent(location.hostname)}`;
