@@ -46,6 +46,10 @@ export const aiProfileSaveSchema = z.strictObject({
   useForRisk: z.boolean(),
   useForRewrite: z.boolean(),
 });
+export const aiProfileDeleteSchema = z.strictObject({
+  expectedVersion: z.number().int().nonnegative(),
+  id: z.uuid(),
+});
 export const aiProfileViewSchema = aiProfileSchema.extend({
   hasKey: z.boolean(),
   updatedAt: z.iso.datetime(),

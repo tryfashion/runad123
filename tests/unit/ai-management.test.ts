@@ -121,6 +121,51 @@ it('switches providers independently and disables only the assigned profile', as
   expect(state.items.find((i) => i.id === a.id)?.useForRisk).toBe(true);
   expect(state.items.find((i) => i.id === b.id)?.useForRewrite).toBe(false);
 });
+it('deletes providers and unassigns active AI purposes', async () => {
+  const f = await setup(),
+    a = profile(),
+    b = profile();
+  await f.manager.save(
+    {
+      expectedVersion: 0,
+      profile: a,
+      apiKey: 'synthetic-a',
+      useForRisk: true,
+      useForRewrite: true,
+    },
+    f.token,
+    randomUUID(),
+  );
+  await f.manager.save(
+    {
+      expectedVersion: 1,
+      profile: b,
+      apiKey: 'synthetic-b',
+      useForRisk: false,
+      useForRewrite: false,
+    },
+    f.token,
+    randomUUID(),
+  );
+  await expect(
+    f.manager.delete({ expectedVersion: 1, id: a.id }, f.token, randomUUID()),
+  ).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
+  const state = await f.manager.delete({ expectedVersion: 2, id: a.id }, f.token, randomUUID());
+  expect(state.items.map((i) => i.id)).toEqual([b.id]);
+  const risk = aiConfigSchema.parse(
+    f.store.rows.settings.find((i) => i.key === 'ai_risk')!.valueJson,
+  );
+  const rewrite = aiConfigSchema.parse(
+    f.store.rows.settings.find((i) => i.key === 'ai_rewrite')!.valueJson,
+  );
+  expect(risk.enabled).toBe(false);
+  expect(risk.providerId).toBeUndefined();
+  expect(rewrite.enabled).toBe(false);
+  expect(rewrite.providerId).toBeUndefined();
+  await expect(
+    f.manager.delete({ expectedVersion: state.expectedVersion, id: a.id }, f.token, randomUUID()),
+  ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+});
 it('runs a real queued task with saved provider parameters, and invalidates changed configuration', async () => {
   const f = await setup(),
     p = profile(),

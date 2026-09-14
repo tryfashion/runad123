@@ -10,6 +10,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Popconfirm,
   Row,
   Space,
   Switch,
@@ -113,6 +114,18 @@ export function AiManagementCard({ locale }: { locale: UiLocale }) {
   useEffect(() => {
     void run(refresh);
   }, []);
+  async function remove() {
+    if (!item) return;
+    const next = aiManagementSchema.parse(
+      await adminApi('/admin/ai-configs/delete', {
+        expectedVersion: data.expectedVersion,
+        id: item.id,
+      }),
+    );
+    setData(next);
+    choose(next.items[0]?.id ?? '', next);
+    setNotice('deleted');
+  }
   async function save() {
     const values = await form.validateFields();
     const { apiKey, useForRisk, useForRewrite, ...profile } = values;
@@ -254,7 +267,27 @@ export function AiManagementCard({ locale }: { locale: UiLocale }) {
         <Col xs={24} lg={17} xl={18}>
           <Card
             title={item?.name ?? t('add')}
-            extra={<Tag color={dirty ? 'orange' : 'green'}>{t(dirty ? 'dirty' : 'saved')}</Tag>}
+            extra={
+              <Space>
+                <Tag color={dirty ? 'orange' : 'green'}>{t(dirty ? 'dirty' : 'saved')}</Tag>
+                {item ? (
+                  <Popconfirm
+                    title={t(
+                      item.useForRisk || item.useForRewrite ? 'deleteActiveTitle' : 'deleteTitle',
+                    )}
+                    description={t('deleteConfirm')}
+                    okText={t('delete')}
+                    cancelText={t('cancel')}
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() => void run(remove)}
+                  >
+                    <Button danger disabled={busy || dirty}>
+                      {t('delete')}
+                    </Button>
+                  </Popconfirm>
+                ) : null}
+              </Space>
+            }
           >
             {error && (
               <Alert type="error" showIcon message={t(error)} style={{ marginBottom: 16 }} />

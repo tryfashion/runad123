@@ -1,6 +1,11 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { aiProfileSchema, aiProfileSaveSchema, aiManagementSchema } from '@runad123/contracts';
+import {
+  aiProfileSchema,
+  aiProfileSaveSchema,
+  aiProfileDeleteSchema,
+  aiManagementSchema,
+} from '@runad123/contracts';
 import { AuthService } from './auth.js';
 import { ServiceError } from './security.js';
 import {
@@ -156,6 +161,59 @@ export class AiManagementService {
         targetId: key,
         beforeJson: { version: previous?.version ?? 0 },
         afterJson: { version, profileId: item.profile.id, keyChanged: !!input.apiKey },
+        requestId,
+        createdAt: now,
+      });
+    });
+    return this.list(token);
+  }
+  async delete(raw: unknown, token: string | undefined, requestId: string) {
+    const input = aiProfileDeleteSchema.parse(raw);
+    await this.auth.store.transaction(async (tx) => {
+      const actor = await this.auth.authorize(tx, token, 'admin');
+      const previous = (await tx.find('settings', { key }))[0];
+      if ((previous?.version ?? 0) !== input.expectedVersion)
+        throw new ServiceError('REVISION_CONFLICT', 409);
+      const items = storedList.parse(previous?.valueJson ?? []);
+      const old = items.find((item) => item.profile.id === input.id);
+      if (!previous || !old) throw new ServiceError('INVALID_INPUT', 400);
+      const now = this.auth.now(),
+        version = input.expectedVersion + 1;
+      await tx.update(
+        'settings',
+        { key },
+        {
+          valueJson: items.filter((item) => item.profile.id !== input.id),
+          version,
+          updatedBy: actor.user!.id,
+          updatedAt: now,
+        },
+      );
+      for (const setting of ['ai_risk', 'ai_rewrite'] as const) {
+        const prior = (await tx.find('settings', { key: setting }))[0];
+        if (!prior) throw new ServiceError('SERVICE_NOT_READY', 503);
+        const config = aiConfigSchema.parse(prior.valueJson);
+        if (config.providerId !== input.id) continue;
+        const { providerId, providerRevision, ...rest } = config;
+        await tx.update(
+          'settings',
+          { key: setting },
+          {
+            valueJson: { ...rest, enabled: false },
+            version: prior.version + 1,
+            updatedBy: actor.user!.id,
+            updatedAt: now,
+          },
+        );
+      }
+      await tx.insert('audits', {
+        id: randomUUID(),
+        adminUserId: actor.user!.id,
+        action: 'ai.config.delete',
+        targetType: 'settings',
+        targetId: key,
+        beforeJson: { version: previous.version, profileId: old.profile.id },
+        afterJson: { version },
         requestId,
         createdAt: now,
       });

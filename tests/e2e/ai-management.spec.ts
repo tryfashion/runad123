@@ -72,6 +72,11 @@ test('administrator saves and edits AI configuration without exposing stored key
   expect(saved.items[0]?.model).toBe('custom-model');
   expect(saved.items[0]?.hasKey).toBe(true);
   await page.screenshot({ path: 'artifacts/ai-configuration.png', fullPage: true });
+  await page.getByRole('button', { name: '删除配置', exact: true }).click();
+  await page.getByRole('button', { name: '删除配置', exact: true }).last().click();
+  await expect(page.getByText('尚未配置 AI API')).toBeVisible();
+  saved = await manager.list(f.root.credential.token);
+  expect(saved.items).toHaveLength(0);
   await page.getByRole('button', { name: '新增配置', exact: true }).click();
   await expect(page.getByLabel('配置名称', { exact: true })).toHaveValue('DeepSeek');
   await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('');

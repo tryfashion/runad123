@@ -224,6 +224,8 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
       const body = await readJson(request);
       if (request.method === 'POST' && path === '/admin/ai-configs')
         return send(await new AiManagementService(service).save(body, token, requestId));
+      if (request.method === 'POST' && path === '/admin/ai-configs/delete')
+        return send(await new AiManagementService(service).delete(body, token, requestId));
       if (request.method === 'POST' && path === '/admin/ai-configs/check')
         return send(await new AiManagementService(service).check(body, token));
       if (request.method === 'POST' && path === '/auth/registration')

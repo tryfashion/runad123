@@ -327,6 +327,7 @@ Blob 属于 offscreen 文档，service worker 保存 permitId/downloadId/主体/
 | GET /admin/ai-configs | 无 | {expectedVersion,items}，items含profile全部非敏感字段、hasKey、updatedAt、useForRisk、useForRewrite；不含密钥 |
 | POST /admin/ai-configs | {expectedVersion,profile,apiKey?,useForRisk,useForRewrite} | 更新后的同上列表 |
 | POST /admin/ai-configs/check | {id} | {authenticated:true,modelFound:boolean}；仅读取模型列表，不执行生成 |
+| POST /admin/ai-configs/delete | {expectedVersion,id} | 更新后的同上列表；删除目标配置并清空指向它的风险检查/改写用途，受管理员权限、CSRF和版本保护 |
 
 profile严格字段：id(UUID)、name、enabled、endpoint(HTTPS公网443)、path、model、riskRules/rewriteRules(各最多12000字符)、timeoutSeconds(5–120)、maxAttempts(1–5)、retryBaseSeconds(1–60)、temperature(0–2)、inputTokenBudget、outputTokens、contextTokens、inputPerMillion/outputPerMillion/dailyBudget（USD十进制字符串）。启用并指定用途时价格和预算必须正数；改写共用风险配置预算。每类用途只选一个profile；勾选新的会替换该用途，取消当前profile勾选会关闭该用途，不影响其他profile已接管的用途。修改endpoint/path时apiKey必填；其他更新省略apiKey保留原密钥。只支持与现有JSON Chat Completions协议兼容的服务，不能把任意API宣称为兼容。
 
