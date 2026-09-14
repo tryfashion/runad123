@@ -7,6 +7,8 @@ const words = {
     '設定相容 Chat Completions 的 API，用於商品標題、描述風險檢查及改寫。圖片檢測暫不啟用。',
     'Configure Chat Completions compatible APIs for product text risk checks and rewriting. Image checks are not enabled.',
   ],
+  provider: ['AI 配置', 'AI 設定', 'AI configuration'],
+  current: ['当前配置', '目前設定', 'Current configuration'],
   add: ['新增配置', '新增設定', 'Add configuration'],
   name: ['配置名称', '設定名稱', 'Configuration name'],
   enabled: ['启用配置', '啟用設定', 'Enable configuration'],
@@ -24,7 +26,9 @@ const words = {
     '用於標題 / 描述風險檢查',
     'Use for title / description risk checks',
   ],
+  riskShort: ['风险检查', '風險檢查', 'Risk check'],
   rewrite: ['用于标题 / 描述改写', '用於標題 / 描述改寫', 'Use for title / description rewriting'],
+  rewriteShort: ['改写', '改寫', 'Rewrite'],
   riskRules: ['风险检查规则', '風險檢查規則', 'Risk check instructions'],
   rewriteRules: ['改写规则', '改寫規則', 'Rewrite instructions'],
   rulesHint: [
@@ -83,6 +87,8 @@ const words = {
   dirty: ['有未保存修改', '有未儲存修改', 'Unsaved changes'],
   updated: ['最近保存', '最近儲存', 'Last saved'],
   empty: ['尚未配置 AI API', '尚未設定 AI API', 'No AI API configured'],
+  noPurpose: ['未分配用途', '未分配用途', 'No task assigned'],
+  disabled: ['未启用', '未啟用', 'Disabled'],
   failed: ['操作失败，请重试', '操作失敗，請重試', 'Request failed; try again'],
   INVALID_INPUT: ['请检查配置字段', '請檢查設定欄位', 'Check configuration fields'],
   REVISION_CONFLICT: [

@@ -65,6 +65,25 @@ export function AiManagementCard({ locale }: { locale: UiLocale }) {
   const endpoint = Form.useWatch('endpoint', form),
     apiPath = Form.useWatch('path', form);
   const item = data.items.find((i) => i.id === selected);
+  const optionLabel = (profile: AiManagement['items'][number]) => {
+    const purposes = [
+      profile.useForRisk ? t('riskShort') : '',
+      profile.useForRewrite ? t('rewriteShort') : '',
+    ].filter(Boolean);
+    return (
+      <Space direction="vertical" size={0}>
+        <Space size={8}>
+          <Typography.Text strong>{profile.name}</Typography.Text>
+          <Tag color={profile.enabled ? 'green' : 'default'}>
+            {profile.enabled ? t('enabled') : t('disabled')}
+          </Tag>
+        </Space>
+        <Typography.Text type="secondary">
+          {profile.model} · {purposes.join(' / ') || t('noPurpose')}
+        </Typography.Text>
+      </Space>
+    );
+  };
   function choose(id: string, source = data) {
     const found = source.items.find((i) => i.id === id);
     form.resetFields();
@@ -133,28 +152,41 @@ export function AiManagementCard({ locale }: { locale: UiLocale }) {
   );
   return (
     <Space direction="vertical" size={20} style={{ width: '100%' }}>
-      <Typography.Paragraph type="secondary">{t('intro')}</Typography.Paragraph>
-      <Space wrap>
-        <Select
-          aria-label={t('title')}
-          style={{ minWidth: 240 }}
-          value={selected || undefined}
-          placeholder={t('empty')}
-          options={data.items.map((i) => ({ value: i.id, label: i.name + ' · ' + i.model }))}
-          onChange={(id) => choose(id)}
-          disabled={busy || !ready}
-        />
-        <Button onClick={() => choose('')} disabled={busy || !ready}>
-          {t('add')}
-        </Button>
-        <Button onClick={() => void run(refresh)} disabled={busy}>
-          {t('refresh')}
-        </Button>
-      </Space>
-      <Card
-        title={item?.name ?? t('add')}
-        extra={<Tag color={dirty ? 'orange' : 'green'}>{t(dirty ? 'dirty' : 'saved')}</Tag>}
-      >
+      <Card size="small">
+        <Row gutter={[16, 12]} align="bottom">
+          <Col xs={24} lg={14}>
+            <Typography.Text strong>{t('current')}</Typography.Text>
+            <Select
+              aria-label={t('provider')}
+              style={{ width: '100%', marginTop: 8 }}
+              value={selected || undefined}
+              placeholder={t('empty')}
+              options={data.items.map((i) => ({ value: i.id, label: `${i.name} · ${i.model}` }))}
+              optionRender={(option) => {
+                const profile = data.items.find((i) => i.id === option.value);
+                return profile ? optionLabel(profile) : option.label;
+              }}
+              onChange={(id) => choose(id)}
+              disabled={busy || !ready}
+            />
+          </Col>
+          <Col xs={24} lg={10}>
+            <Space wrap style={{ width: '100%', justifyContent: 'flex-end' }}>
+              <Tag color={dirty ? 'orange' : 'green'}>{t(dirty ? 'dirty' : 'saved')}</Tag>
+              <Button onClick={() => choose('')} disabled={busy || !ready}>
+                {t('add')}
+              </Button>
+              <Button onClick={() => void run(refresh)} disabled={busy}>
+                {t('refresh')}
+              </Button>
+            </Space>
+          </Col>
+        </Row>
+        <Typography.Paragraph type="secondary" style={{ margin: '12px 0 0' }}>
+          {t('intro')}
+        </Typography.Paragraph>
+      </Card>
+      <Card title={item?.name ?? t('add')}>
         {error && <Alert type="error" showIcon message={t(error)} style={{ marginBottom: 16 }} />}
         {notice && (
           <Alert
