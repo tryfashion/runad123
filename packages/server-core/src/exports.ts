@@ -1,3 +1,4 @@
+import { aiConfigSchema } from './deepseek.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { permitInputSchema, downloadEventSchema, permitSchema } from '@runad123/contracts/export';
@@ -58,6 +59,8 @@ export class ExportService {
         +risk.job.expiresAt <= +now ||
         risk.job.model !== config.model ||
         risk.job.promptVersion !== config.promptVersion ||
+        aiConfigSchema.parse(risk.job.configJson).providerId !== config.providerId ||
+        aiConfigSchema.parse(risk.job.configJson).providerRevision !== config.providerRevision ||
         risk.job.schemaVersion !== 1 ||
         !same(risk.revision.textHash, row.textHash)
       )

@@ -105,7 +105,9 @@ export class RiskWorker {
       if (
         !config.enabled ||
         config.model !== job.model ||
-        config.promptVersion !== job.promptVersion
+        config.promptVersion !== job.promptVersion ||
+        config.providerId !== aiConfigSchema.parse(job.configJson).providerId ||
+        config.providerRevision !== aiConfigSchema.parse(job.configJson).providerRevision
       ) {
         await service.finish(tx, job, counters, 'failed', 'AI_UNAVAILABLE');
         return null;
@@ -161,7 +163,10 @@ export class RiskWorker {
     });
     if (!attempt) return true;
     const controller = new AbortController(),
-      timeout = setTimeout(() => controller.abort(), 90000);
+      timeout = setTimeout(
+        () => controller.abort(),
+        (aiConfigSchema.parse(claimed.configJson).timeoutSeconds ?? 90) * 1000,
+      );
     const renewal = setInterval(() => {
       void auth.store
         .renewJob(claimed.id, claimed.leaseToken!, auth.now())
@@ -325,7 +330,9 @@ export class RiskWorker {
             errorCode: outcome.error ?? 'AI_UNAVAILABLE',
             invalidResponses: invalid,
             nextRunAt: new Date(
-              +now + Math.min(30000, 2000 * 2 ** job.attempts) + Math.floor(this.jitter() * 1000),
+              +now +
+                Math.min(300000, (config.retryBaseSeconds ?? 2) * 1000 * 2 ** job.attempts) +
+                Math.floor(this.jitter() * 1000),
             ),
             leaseUntil: null,
             leaseToken: null,

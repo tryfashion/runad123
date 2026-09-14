@@ -1,3 +1,4 @@
+import { ConfiguredAiProvider } from './ai-management.js';
 import { MaintenanceService } from './maintenance.js';
 import { createAuthStore } from '@runad123/db';
 import { randomUUID } from 'node:crypto';
@@ -10,16 +11,22 @@ export function createWorkerRuntime(env: NodeJS.ProcessEnv) {
   if (!env.MYSQL_URL || !env.AUTH_SECRET) return null;
   const store = createAuthStore(env.MYSQL_URL),
     auth = new AuthService(store, disabledMailer, env.AUTH_SECRET),
-    worker = env.DEEPSEEK_API_KEY
-      ? new RiskWorker(
-          new RiskService(auth),
-          new DeepSeekProvider(
-            env.DEEPSEEK_API_KEY,
-            env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com',
-          ),
-          'worker-' + randomUUID(),
-        )
-      : null;
+    worker =
+      env.LOCAL_PREVIEW_ENABLED === 'true'
+        ? null
+        : new RiskWorker(
+            new RiskService(auth),
+            new ConfiguredAiProvider(
+              auth,
+              env.DEEPSEEK_API_KEY
+                ? new DeepSeekProvider(
+                    env.DEEPSEEK_API_KEY,
+                    env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com',
+                  )
+                : undefined,
+            ),
+            'worker-' + randomUUID(),
+          );
   const maintenance = new MaintenanceService(auth);
   let lastMaintenance = 0;
   return {

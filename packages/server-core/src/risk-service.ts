@@ -139,6 +139,8 @@ export class RiskService<K extends AiKind = 'risk_check'> {
           : same(revision.textHash, currentRevision.textHash)) &&
         job.model === config.model &&
         job.promptVersion === config.promptVersion &&
+        aiConfigSchema.parse(job.configJson).providerId === config.providerId &&
+        aiConfigSchema.parse(job.configJson).providerRevision === config.providerRevision &&
         job.schemaVersion === 1 &&
         (job.state !== 'succeeded' || (!!job.expiresAt && +job.expiresAt > +now));
       return (this.kind === 'rewrite' ? rewriteStatusSchema : riskStatusSchema).parse({
@@ -257,6 +259,8 @@ export class RiskService<K extends AiKind = 'risk_check'> {
           model: config.model,
           promptVersion: config.promptVersion,
           schemaVersion: 1,
+          providerId: config.providerId,
+          providerRevision: config.providerRevision,
         }),
       );
       const candidates = await tx.find('jobs', { cacheKey });
@@ -277,7 +281,9 @@ export class RiskService<K extends AiKind = 'risk_check'> {
       )
         throw new ServiceError('AI_RETRY_REQUIRED', 409);
       if (!job) {
-        const reserved = tokenCost(config.inputTokenBudget, config.outputTokens, config) * 3n;
+        const reserved =
+          tokenCost(config.inputTokenBudget, config.outputTokens, config) *
+          BigInt(config.maxAttempts ?? 3);
         const subject = counters[1]!,
           global = counters[0]!;
         if (
@@ -321,7 +327,7 @@ export class RiskService<K extends AiKind = 'risk_check'> {
           promptVersion: config.promptVersion,
           schemaVersion: 1,
           attempts: 0,
-          maxAttempts: 3,
+          maxAttempts: config.maxAttempts ?? 3,
           nextRunAt: now,
           leaseUntil: null,
           leaseToken: null,

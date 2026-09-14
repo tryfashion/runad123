@@ -2,6 +2,8 @@
 
 ## 当前进度
 
+- 2026-09-14 新增系统管理 → AI配置管理：最多20套Chat Completions兼容API，检查/改写独立选择，密钥AES-256-GCM加密存MySQL既有settings，支持地址/路径/模型/补充规则/超时/重试/Temperature/Token与价格预算；保存后worker动态读取，沿用旧环境DeepSeek兼容，预览模式保持禁用AI执行。检查配置仅验证模型列表，不发送商品或生成请求。配置版本进入缓存和导出有效性校验，旧排队任务不能静默切换API。三语UI、权限/CSRF、版本冲突及脱敏审计。140项单元通过，后台浏览器真实表单保存/编辑/密钥留空保持测试通过（API为真实handler、MySQL内存模拟）；截图artifacts/ai-configuration.png。真实供应商API、真实MySQL及线上部署待验证；未实现图片检测和并发控制，不新增数据库结构迁移。
+
 - 2026-09-14 后台/admin及子路由新增X-Robots-Tag和robots metadata（noindex/nofollow/nosnippet），robots.txt单独禁止常见AI爬虫抓取后台。普通搜索爬虫保留读取noindex入口；规则不能保证恶意爬虫遵守，也不替代后台鉴权。需部署网站生效。
 
 - 2026-09-14 网站新增浅底蓝色大写R favicon，与插件共用现有品牌图形；App Router icon.svg及多尺寸favicon.ico覆盖全站页面，ICO含16/32/48尺寸PNG。需部署网站后生效。

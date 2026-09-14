@@ -1,3 +1,4 @@
+import { AiManagementService } from './ai-management.js';
 import { MemberService } from './member.js';
 import { DomainRegistrationService } from './domain-registration.js';
 import { ThemeLinkService } from './theme-links.js';
@@ -150,6 +151,8 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
         return send(await new ThemeLinkService(service).config(token));
       if (request.method === 'GET' && path === '/admin/sourcing-sites')
         return send(await new ThemeLinkService(service).sourcingConfig(token));
+      if (request.method === 'GET' && path === '/admin/ai-configs')
+        return send(await new AiManagementService(service).list(token));
       if (request.method === 'GET' && path === '/admin/overview')
         return send(await admin.overview(token));
       if (request.method === 'GET' && path === '/admin/products/trending')
@@ -219,6 +222,10 @@ export function createAuthHandler(service: AuthService, options: HttpOptions) {
           throw new ServiceError('CSRF_INVALID', 403);
       }
       const body = await readJson(request);
+      if (request.method === 'POST' && path === '/admin/ai-configs')
+        return send(await new AiManagementService(service).save(body, token, requestId));
+      if (request.method === 'POST' && path === '/admin/ai-configs/check')
+        return send(await new AiManagementService(service).check(body, token));
       if (request.method === 'POST' && path === '/auth/registration')
         return send(await members.register(body, ip, bearer), 202);
       if (request.method === 'POST' && path === '/auth/password/login') {

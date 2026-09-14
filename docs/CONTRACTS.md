@@ -217,7 +217,7 @@ AI 写请求每安装 30 次/分钟、轮询每安装 60 次/分钟（网站只�
 
 1. 会话有效且符合当前登录模式；草稿归属有效。
 2. 请求 revision 等于当前 revision，商品完整且字段校验通过。
-3. riskRequest 可被当前主体访问，其结果 succeeded，输入 textHash 与当前相同，模型/prompt/schema 是当前允许版本且未过期。
+3. riskRequest 可被当前主体访问，其结果 succeeded，输入 textHash 与当前相同，模型/prompt/schema/providerId/providerRevision 是当前允许版本且未过期。
 4. signals_found 必须确认全部 finding IDs；needs_review 必须另含保留确认标识 `assessment:needs_review`；no_obvious_signals 不要求额外勾选。
 5. 保存许可及确认时的结果摘要、版本、主体和时间，返回完全相同的 preparedRevision。
 
@@ -317,3 +317,17 @@ Blob 属于 offscreen 文档，service worker 保存 permitId/downloadId/主体/
 - 网站发送密码给扩展后台，由后台仅传给自家 API；网页不接收插件 Bearer。sessionStorage 仅保留邮箱和用途，密码只在表单内存中、提交申请/登录成功时清空，不进入日志。chrome.storage.session 保存窗口绑定，完成后清理。
 - 完成前再次验证有效账号，关窗并聚焦原 tab/window；原标签已关闭则不重建。窗口直接访问而缺少有效插件流程时提示从插件打开。网站独立 /account 使用 Cookie/CSRF，不调用插件桥接。
 注册弹窗桥接拒绝（窗口过期或来源绑定不符）返回 REGISTRATION_WINDOW_EXPIRED；服务器 FORBIDDEN 保留为权限拒绝，不映射为插件入口错误。Chrome 通信失败提示插件重载/版本检查，不放宽来源验证。
+
+## AI配置管理（系统管理）
+
+仅管理员网站会话可调用；写入及检查均要求网站Origin与CSRF，不向插件开放密钥管理。
+
+| 方法/路径 | 请求 | 响应 |
+| --- | --- | --- |
+| GET /admin/ai-configs | 无 | {expectedVersion,items}，items含profile全部非敏感字段、hasKey、updatedAt、useForRisk、useForRewrite；不含密钥 |
+| POST /admin/ai-configs | {expectedVersion,profile,apiKey?,useForRisk,useForRewrite} | 更新后的同上列表 |
+| POST /admin/ai-configs/check | {id} | {authenticated:true,modelFound:boolean}；仅读取模型列表，不执行生成 |
+
+profile严格字段：id(UUID)、name、enabled、endpoint(HTTPS公网443)、path、model、riskRules/rewriteRules(各最多12000字符)、timeoutSeconds(5–120)、maxAttempts(1–5)、retryBaseSeconds(1–60)、temperature(0–2)、inputTokenBudget、outputTokens、contextTokens、inputPerMillion/outputPerMillion/dailyBudget（USD十进制字符串）。启用并指定用途时价格和预算必须正数；改写共用风险配置预算。每类用途只选一个profile；勾选新的会替换该用途，取消当前profile勾选会关闭该用途，不影响其他profile已接管的用途。修改endpoint/path时apiKey必填；其他更新省略apiKey保留原密钥。只支持与现有JSON Chat Completions协议兼容的服务，不能把任意API宣称为兼容。
+
+错误：REVISION_CONFLICT/409、AI_KEY_REQUIRED/400、AI_BUDGET_REQUIRED/400、AI_CHECK_UNSUPPORTED/400、AI_CHECK_FAILED/502；检查每管理员3次/分钟。真实请求由服务端拒绝内网地址/跳转；密钥不回显，供应商原始错误不透传。任务AI_CONFIG_CHANGED为非重试失败；新任务按新配置启动，旧结果不命中新配置缓存。

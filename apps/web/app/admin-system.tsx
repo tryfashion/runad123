@@ -43,6 +43,8 @@ import {
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons';
+import { AiManagementCard } from './ai-management-card';
+import { aiManagementText } from '@runad123/contracts';
 import { MemberReviewCard } from './member-review-card';
 import { ThemeLinksCard } from './theme-links-card';
 import { adminApi, ApiFailure } from './admin-api';
@@ -63,6 +65,7 @@ const { Header, Sider, Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
 
 type Section =
+  | 'ai-config'
   | 'overview'
   | 'products'
   | 'accounts'
@@ -77,6 +80,7 @@ type Section =
 type DataRow = Record<string, unknown>;
 
 const sectionIcons: Record<Section, ReactNode> = {
+  'ai-config': <RobotOutlined />,
   overview: <AppstoreOutlined />,
   products: <ProductOutlined />,
   accounts: <TeamOutlined />,
@@ -174,12 +178,21 @@ export function AdminSystem({
   const [passwordReset, setPasswordReset] = useState({ userId: '', password: '' });
 
   const menuItems = useMemo(
-    () =>
-      sections.map((item) => ({
+    () => [
+      ...sections.map((item) => ({
         key: item,
         icon: sectionIcons[item],
         label: t('nav.' + item),
       })),
+      {
+        key: 'system',
+        icon: <SettingOutlined />,
+        label: aiManagementText(locale, 'system'),
+        children: [
+          { key: 'ai-config', icon: <RobotOutlined />, label: aiManagementText(locale, 'title') },
+        ],
+      },
+    ],
     [locale],
   );
 
@@ -370,7 +383,7 @@ export function AdminSystem({
       <Layout className="admin-main">
         <Header className="admin-topbar">
           <Title level={3} className="admin-page-title">
-            {t('nav.' + section)}
+            {section === 'ai-config' ? aiManagementText(locale, 'title') : t('nav.' + section)}
           </Title>
           <Space size={12} wrap>
             <Select
@@ -425,6 +438,7 @@ export function AdminSystem({
   );
 
   function renderSection() {
+    if (section === 'ai-config') return <AiManagementCard locale={locale} />;
     if (section === 'overview')
       return (
         <Overview

@@ -23,7 +23,7 @@
 | sessions | id、token_hash、kind(anonymous/extension/web)、installation_id nullable、user_id nullable、expires_at、last_seen_at、revoked_at | UNIQUE(token_hash)；INDEX(user_id,revoked_at)；匿名必须有 installation，无 user |
 | auth_challenges | id、email_normalized、installation_id nullable、pre_auth_hash nullable、code_hmac nullable（消费后清除）、state(pending/sent/failed)、expires_at、attempts、consumed_at、client_kind、delivery_locale | INDEX(email_normalized,created_at)；仅 sent 可验证，校验/消费事务化，一次性使用；邮件语言创建时冻结 |
 | rate_limit_buckets | key_hash、window_start、window_seconds、count、expires_at | UNIQUE(key_hash,window_start,window_seconds)；INDEX(expires_at)，原子计数 |
-| settings | key、value_json、version、updated_by | UNIQUE(key)；后台只能更新服务端白名单及已验证类型 |
+| settings | key、value_json、version、updated_by；ai_providers 保存配置数组及加密密钥 | UNIQUE(key)；后台只能更新服务端白名单及已验证类型 |
 | tutorials | id、title、summary、url、content_locale、category、placement、sort_order、enabled | INDEX(enabled,placement,content_locale,sort_order)；HTTPS＋允许域名校验；每行一篇原语言文章 |
 | admin_audit_logs | id、admin_user_id、action、target_type、target_id、before_json、after_json、request_id | INDEX(admin_user_id,created_at)；排除密钥、验证码和令牌 |
 | admin_credentials | user_id、login_normalized、password_salt、password_hash、password_version | PK(user_id)；UNIQUE(login_normalized)；仅内部管理员密码登录使用，保存 scrypt salt/hash，不保存明文 |
@@ -170,3 +170,7 @@ M6 worker 每 30 秒触发维护周期，每次一个个人删除批次、一个
 
 管理员整体保存主题配置，沿用 AuthStore 的事务锁，验证 expectedVersion 后递增版本，同时写 admin_audit_logs，action=`theme_links.save`、target_type=`settings`、target_id=`theme_links`，保存前后配置。无配置时公开查找返回 null；后台首次保存也可受控创建配置。配置仅保存公开返利链接，不保存合作平台密码/API 密钥。删除单条通过版本化完整数组保存实现。
 
+
+### AI配置存储
+
+settings.ai_providers.value_json为最多20项数组，每项{profile,encryptedKey,updatedAt,revision}；profile字段见CONTRACTS AI配置管理。encryptedKey为base64(nonce12 + GCM tag16 + ciphertext)，不得返回浏览器或写入审计。列表hasKey由是否存在密文推导。settings行版本用于乐观并发控制，单配置revision使用保存时全局版本。首次合法保存创建该settings行，复用现有表结构，无DDL变更、无需新增迁移。ai_risk/ai_rewrite同步对应用途的providerId/providerRevision及非敏感参数；任务config_json不含密文或明文API Key。
